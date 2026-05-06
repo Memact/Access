@@ -55,7 +55,14 @@ export function migrateStore(data) {
   const base = data && typeof data === "object" ? data : {}
   return {
     schema_version: "memact.access.v0",
-    users: Array.isArray(base.users) ? base.users : [],
+    users: Array.isArray(base.users)
+      ? base.users.map((user) => ({
+        ...user,
+        external_auth_id: user.external_auth_id || null,
+        auth_provider: user.auth_provider || null,
+        avatar_url: user.avatar_url || ""
+      }))
+      : [],
     sessions: Array.isArray(base.sessions) ? base.sessions : [],
     apps: Array.isArray(base.apps) ? base.apps : [],
     api_keys: Array.isArray(base.api_keys)

@@ -12,9 +12,10 @@ export class AccessError extends Error {
 }
 
 export class AccessService {
-  constructor(store, now = () => new Date()) {
+  constructor(store, now = () => new Date(), options = {}) {
     this.store = store
     this.now = now
+    this.verifyExternalSession = options.verifyExternalSession || verifySupabaseAccessToken
   }
 
   async signup({ email, password }) {
@@ -54,17 +55,42 @@ export class AccessService {
   }
 
   async authenticateSession(token) {
-    const tokenHash = hashSecret(extractBearer(token))
-    const data = await this.store.read()
-    const session = data.sessions.find((item) => item.token_hash === tokenHash && !item.revoked_at)
-    if (!session || new Date(session.expires_at).getTime() < this.now().getTime()) {
+    const rawToken = extractBearer(token)
+    if (!rawToken) {
       throw new AccessError(401, "invalid_session", "Session is missing or expired.")
     }
-    const user = data.users.find((item) => item.id === session.user_id)
-    if (!user) {
-      throw new AccessError(401, "invalid_session", "Session user no longer exists.")
+    const tokenHash = hashSecret(rawToken)
+    const data = await this.store.read()
+    const session = data.sessions.find((item) => item.token_hash === tokenHash && !item.revoked_at)
+    if (session && new Date(session.expires_at).getTime() >= this.now().getTime()) {
+      const user = data.users.find((item) => item.id === session.user_id)
+      if (!user) {
+        throw new AccessError(401, "invalid_session", "Session user no longer exists.")
+      }
+      return { user: publicUser(user), session: publicSession(session) }
     }
-    return { user: publicUser(user), session: publicSession(session) }
+
+    const externalUser = await this.verifyExternalSession(rawToken)
+    if (!externalUser?.id || !externalUser?.email) {
+      throw new AccessError(401, "invalid_session", "Session is missing or expired.")
+    }
+    return this.mutate(async (nextData) => {
+      const user = upsertExternalUser(nextData, externalUser, this.now)
+      audit(nextData, user.id, "user.external_session", {
+        provider: user.auth_provider || "supabase",
+        email: user.email
+      })
+      return {
+        user: publicUser(user),
+        session: {
+          id: `supabase:${externalUser.id}`,
+          user_id: user.id,
+          created_at: timestamp(this.now()),
+          expires_at: null,
+          revoked_at: null
+        }
+      }
+    })
   }
 
   async registerApp(userId, { name, description = "", redirect_urls = [] }) {
@@ -303,6 +329,64 @@ function assertUser(data, userId) {
   return user
 }
 
+async function verifySupabaseAccessToken(token) {
+  const supabaseUrl = String(process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || "").replace(/\/+$/, "")
+  const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ""
+  if (!supabaseUrl || !supabaseAnonKey || !token) {
+    return null
+  }
+
+  const response = await fetch(`${supabaseUrl}/auth/v1/user`, {
+    headers: {
+      apikey: supabaseAnonKey,
+      Authorization: `Bearer ${token}`
+    }
+  }).catch(() => null)
+
+  if (!response?.ok) {
+    return null
+  }
+
+  const payload = await response.json().catch(() => null)
+  if (!payload?.id || !payload?.email) {
+    return null
+  }
+  return {
+    id: `supabase:${payload.id}`,
+    email: payload.email,
+    auth_provider: payload.app_metadata?.provider || payload.identities?.[0]?.provider || "supabase",
+    avatar_url: payload.user_metadata?.avatar_url || payload.user_metadata?.picture || ""
+  }
+}
+
+function upsertExternalUser(data, externalUser, now) {
+  let user = data.users.find((item) => item.external_auth_id === externalUser.id)
+  if (!user) {
+    user = data.users.find((item) => item.email === normalizeEmail(externalUser.email))
+  }
+  if (user) {
+    user.external_auth_id = externalUser.id
+    user.auth_provider = externalUser.auth_provider
+    user.avatar_url = externalUser.avatar_url || user.avatar_url || ""
+    user.updated_at = timestamp(now())
+    return user
+  }
+
+  user = {
+    id: randomId("usr"),
+    external_auth_id: externalUser.id,
+    email: normalizeEmail(externalUser.email),
+    password_hash: null,
+    auth_provider: externalUser.auth_provider || "supabase",
+    avatar_url: externalUser.avatar_url || "",
+    plan: "free_unlimited",
+    created_at: timestamp(now()),
+    updated_at: timestamp(now())
+  }
+  data.users.push(user)
+  return user
+}
+
 function extractBearer(value) {
   const raw = String(value || "")
   return raw.toLowerCase().startsWith("bearer ") ? raw.slice(7).trim() : raw.trim()
@@ -317,6 +401,8 @@ function publicUser(user) {
   return {
     id: user.id,
     email: user.email,
+    provider: user.auth_provider || (user.external_auth_id ? "supabase" : "email"),
+    avatar_url: user.avatar_url || "",
     plan: user.plan,
     created_at: user.created_at
   }
