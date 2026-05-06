@@ -24,9 +24,5 @@
     "dev": "node --watch ./src/server.mjs",
     "check": "node ./scripts/check.mjs && node --test",
     "test": "node --test"
-  },
-  "dependencies": {
-    "dotenv": "^17.4.2",
-    "nodemailer": "^8.0.7"
   }
 }

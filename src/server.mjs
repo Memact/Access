@@ -1,8 +1,6 @@
-import "dotenv/config"
 import http from "node:http"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
-import { createEmailNotifierFromEnv } from "./email.mjs"
 import { JsonFileStore } from "./store.mjs"
 import { AccessError, AccessService } from "./service.mjs"
 import { SENSITIVE_CAPTURE_RULES } from "./policy.mjs"
@@ -132,7 +130,7 @@ function send(response, status, payload, request) {
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  const service = new AccessService(new JsonFileStore(storePath), () => new Date(), createEmailNotifierFromEnv())
+  const service = new AccessService(new JsonFileStore(storePath))
   createAccessServer(service).listen(port, host, () => {
     console.log(`Memact Access listening on http://${host}:${port}`)
   })

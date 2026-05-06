@@ -1,5 +1,4 @@
 import { hashPassword, hashSecret, randomId, randomToken, verifyPassword } from "./crypto.mjs"
-import { NoopEmailNotifier } from "./email.mjs"
 import { DEFAULT_APP_SCOPES, hasAllScopes, normalizeScopes, SCOPE_DEFINITIONS, unknownScopes } from "./policy.mjs"
 
 const SESSION_TTL_MS = 1000 * 60 * 60 * 24 * 30
@@ -13,10 +12,9 @@ export class AccessError extends Error {
 }
 
 export class AccessService {
-  constructor(store, now = () => new Date(), notifier = new NoopEmailNotifier()) {
+  constructor(store, now = () => new Date()) {
     this.store = store
     this.now = now
-    this.notifier = notifier
   }
 
   async signup({ email, password }) {
@@ -51,16 +49,6 @@ export class AccessService {
       user.updated_at = timestamp(this.now())
       const session = createSession(data, user.id, this.now)
       audit(data, user.id, "user.signin", { email: normalizedEmail })
-      await this.notifyUser(data, user.id, {
-        subject: "New Memact sign-in",
-        text: [
-          "Your Memact Access account was signed in.",
-          "",
-          `Time: ${timestamp(this.now())}`,
-          "",
-          "If this was not you, revoke active API keys and reset access immediately."
-        ].join("\n")
-      })
       return { user: publicUser(user), session }
     })
   }
@@ -140,18 +128,6 @@ export class AccessService {
       }
       data.api_keys.push(apiKey)
       audit(data, userId, "api_key.create", { app_id: app.id, key_id: apiKey.id, scopes: cleanScopes })
-      await this.notifyUser(data, userId, {
-        subject: "Memact API key created",
-        text: [
-          `A new Memact API key was created for ${app.name}.`,
-          "",
-          `Key prefix: ${apiKey.key_prefix}...`,
-          `Scopes: ${cleanScopes.join(", ")}`,
-          `Time: ${timestamp(this.now())}`,
-          "",
-          "Memact does not email raw API keys. If you did not create this key, revoke it from Access."
-        ].join("\n")
-      })
       return { api_key: publicApiKey(apiKey), key: rawKey }
     })
   }
@@ -241,7 +217,6 @@ export class AccessService {
       }
       const effectiveScopes = intersectScopes(key.scopes, consent.scopes)
       const allowed = hasAllScopes(effectiveScopes, cleanRequired)
-      const firstAllowedUse = allowed && !key.first_used_notified_at
       key.last_used_at = timestamp(this.now())
       audit(data, key.owner_user_id, allowed ? "access.allow" : "access.deny", {
         app_id: app.id,
@@ -250,21 +225,6 @@ export class AccessService {
       })
       if (!allowed) {
         throw new AccessError(403, "scope_denied", "API key or consent does not include the required scopes.")
-      }
-      if (firstAllowedUse) {
-        key.first_used_notified_at = timestamp(this.now())
-        await this.notifyUser(data, key.owner_user_id, {
-          subject: "Memact API usage started",
-          text: [
-            `${app.name} used a Memact API key for the first time.`,
-            "",
-            `Key prefix: ${key.key_prefix}...`,
-            `Effective scopes: ${effectiveScopes.join(", ")}`,
-            `Time: ${timestamp(this.now())}`,
-            "",
-            "This means the app has started using the access you granted."
-          ].join("\n")
-        })
       }
       return {
         allowed: true,
@@ -292,28 +252,6 @@ export class AccessService {
     const result = await fn(data)
     await this.store.write(data)
     return result
-  }
-
-  async notifyUser(data, userId, message) {
-    const user = data.users.find((item) => item.id === userId)
-    if (!user) return
-    try {
-      const result = await this.notifier.send({
-        to: user.email,
-        subject: message.subject,
-        text: message.text
-      })
-      audit(data, userId, result.sent ? "notification.email_sent" : "notification.email_skipped", {
-        subject: message.subject,
-        channel: result.channel,
-        reason: result.reason
-      })
-    } catch (error) {
-      audit(data, userId, "notification.email_failed", {
-        subject: message.subject,
-        message: error.message
-      })
-    }
   }
 }
 

@@ -124,33 +124,9 @@ X-Memact-API-Key: <api_key>
 - Sensitive capture exclusions still happen in Capture before graph formation.
 - Access is not a raw-memory export service.
 
-## Email Alerts
-
-Access can send security emails for:
-
-- new sign-ins
-- API key creation
-- first successful API key use
-
-For Brevo, copy `.env.example` to `.env` and fill only the SMTP login and key:
-
-```text
-MEMACT_ACCESS_SMTP_HOST=smtp-relay.brevo.com
-MEMACT_ACCESS_SMTP_PORT=587
-MEMACT_ACCESS_SMTP_SECURE=false
-MEMACT_ACCESS_SMTP_USER=<brevo smtp login>
-MEMACT_ACCESS_SMTP_PASS=<brevo smtp key>
-MEMACT_ACCESS_EMAIL_FROM="Memact <no-reply@memact.com>"
-```
-
-The sender address must be verified in Brevo. If SMTP is not configured, Access
-still works and records a skipped notification in the audit log.
-
 ## Render
 
-`render.yaml` defines a Node web service for Access. In Render, set the Brevo
-SMTP login and key as secret environment variables. Do not put real SMTP
-credentials in Git.
+`render.yaml` defines a Node web service for Access.
 
 Render's free web service filesystem is not a durable database. It is fine for
 testing the portal, but production Access should move the store to a managed

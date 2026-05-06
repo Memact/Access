@@ -16,15 +16,3 @@ services:
         value: .data/access-store.json
       - key: MEMACT_ACCESS_ALLOWED_ORIGINS
         value: https://www.memact.com,https://memact.com,https://memact-website.onrender.com
-      - key: MEMACT_ACCESS_EMAIL_FROM
-        value: Memact <no-reply@memact.com>
-      - key: MEMACT_ACCESS_SMTP_HOST
-        value: smtp-relay.brevo.com
-      - key: MEMACT_ACCESS_SMTP_PORT
-        value: "587"
-      - key: MEMACT_ACCESS_SMTP_SECURE
-        value: "false"
-      - key: MEMACT_ACCESS_SMTP_USER
-        sync: false
-      - key: MEMACT_ACCESS_SMTP_PASS
-        sync: false
