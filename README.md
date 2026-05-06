@@ -155,6 +155,9 @@ X-Memact-API-Key: <api_key>
 
 `render.yaml` defines a Node web service for Access.
 
+If Blueprint setup fails, use the direct Dashboard path in
+[`RENDER_DIRECT_DEPLOY.md`](./RENDER_DIRECT_DEPLOY.md).
+
 Render's free web service filesystem is not a durable database. It is fine for
 testing the portal, but production Access should move the store to a managed
 database or persistent storage.
