@@ -1,9 +1,12 @@
 import http from "node:http"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
+import { loadLocalEnv } from "./env.mjs"
 import { JsonFileStore } from "./store.mjs"
 import { AccessError, AccessService } from "./service.mjs"
 import { SENSITIVE_CAPTURE_RULES } from "./policy.mjs"
+
+loadLocalEnv()
 
 const host = process.env.MEMACT_ACCESS_HOST || "127.0.0.1"
 const port = Number(process.env.PORT || process.env.MEMACT_ACCESS_PORT || 8787)
