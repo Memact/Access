@@ -29,14 +29,25 @@ export function createAccessServer(service) {
       send(response, 200, result, request)
     } catch (error) {
       const status = error instanceof AccessError ? error.status : 500
+      const message = status === 500
+        ? safeInternalErrorMessage(error)
+        : error.message
       send(response, status, {
         error: {
           code: error.code || "internal_error",
-          message: status === 500 ? "Access failed unexpectedly." : error.message
+          message
         }
       }, request)
     }
   })
+}
+
+function safeInternalErrorMessage(error) {
+  const raw = String(error?.message || "")
+  if (/fetch failed|network|ENOTFOUND|ECONNREFUSED|ETIMEDOUT|supabase/i.test(raw)) {
+    return "Access could not verify Supabase login. Check Access .env and network settings."
+  }
+  return "Access could not complete the request. Check Access logs."
 }
 
 async function route(service, request, url, body) {
