@@ -1,0 +1,28 @@
+{
+  "name": "memact-access",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Memact Access layer for auth, API keys, consent, and app scopes.",
+  "license": "SEE LICENSE IN LICENSE",
+  "type": "module",
+  "main": "./src/server.mjs",
+  "exports": {
+    ".": "./src/service.mjs",
+    "./server": "./src/server.mjs"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Memact/Access.git"
+  },
+  "homepage": "https://github.com/Memact/Access",
+  "engines": {
+    "node": ">=20",
+    "npm": ">=10"
+  },
+  "scripts": {
+    "start": "node ./src/server.mjs",
+    "dev": "node --watch ./src/server.mjs",
+    "check": "node ./scripts/check.mjs && node --test",
+    "test": "node --test"
+  }
+}
