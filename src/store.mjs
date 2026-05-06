@@ -58,7 +58,12 @@ export function migrateStore(data) {
     users: Array.isArray(base.users) ? base.users : [],
     sessions: Array.isArray(base.sessions) ? base.sessions : [],
     apps: Array.isArray(base.apps) ? base.apps : [],
-    api_keys: Array.isArray(base.api_keys) ? base.api_keys : [],
+    api_keys: Array.isArray(base.api_keys)
+      ? base.api_keys.map((key) => ({
+        ...key,
+        first_used_notified_at: key.first_used_notified_at || null
+      }))
+      : [],
     consents: Array.isArray(base.consents) ? base.consents : [],
     audit_log: Array.isArray(base.audit_log) ? base.audit_log : []
   }

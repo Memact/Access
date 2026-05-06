@@ -65,3 +65,34 @@ test("unknown scopes are rejected instead of silently accepted", async () => {
     /Unknown scopes/
   )
 })
+
+test("security emails are sent for signin, API key creation, and first API use", async () => {
+  const messages = []
+  const notifier = {
+    async send(message) {
+      messages.push(message)
+      return { sent: true, channel: "test" }
+    }
+  }
+  const service = new AccessService(new MemoryStore(), () => new Date("2026-05-06T00:00:00.000Z"), notifier)
+  const signup = await service.signup({ email: "notify@example.com", password: "long password" })
+  await service.signin({ email: "notify@example.com", password: "long password" })
+  const app = await service.registerApp(signup.user.id, { name: "Notify App" })
+  const key = await service.createApiKey(signup.user.id, {
+    app_id: app.app.id,
+    scopes: ["capture:webpage", "schema:write"]
+  })
+  await service.grantConsent(signup.user.id, {
+    app_id: app.app.id,
+    scopes: ["capture:webpage", "schema:write"]
+  })
+  await service.verifyApiAccess(key.key, ["capture:webpage"])
+  await service.verifyApiAccess(key.key, ["capture:webpage"])
+
+  assert.deepEqual(messages.map((message) => message.subject), [
+    "New Memact sign-in",
+    "Memact API key created",
+    "Memact API usage started"
+  ])
+  assert.equal(messages.some((message) => message.text.includes(key.key)), false)
+})

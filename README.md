@@ -124,6 +124,17 @@ X-Memact-API-Key: <api_key>
 - Sensitive capture exclusions still happen in Capture before graph formation.
 - Access is not a raw-memory export service.
 
+## Email Alerts
+
+Access can send security emails for:
+
+- new sign-ins
+- API key creation
+- first successful API key use
+
+Set the SMTP variables in `.env.example`. If SMTP is not configured, Access
+still works and records a skipped notification in the audit log.
+
 ## License
 
 See `LICENSE`.
