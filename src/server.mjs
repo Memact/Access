@@ -8,7 +8,7 @@ import { SENSITIVE_CAPTURE_RULES } from "./policy.mjs"
 const host = process.env.MEMACT_ACCESS_HOST || "127.0.0.1"
 const port = Number(process.env.PORT || process.env.MEMACT_ACCESS_PORT || 8787)
 const storePath = process.env.MEMACT_ACCESS_STORE || ".data/access-store.json"
-const allowedOrigins = new Set(String(process.env.MEMACT_ACCESS_ALLOWED_ORIGINS || "http://localhost:5173,http://localhost:4173,https://www.memact.com")
+const allowedOrigins = new Set(String(process.env.MEMACT_ACCESS_ALLOWED_ORIGINS || "http://localhost:3000,http://localhost:5173,http://localhost:4173,https://www.memact.com")
   .split(",")
   .map((item) => item.trim())
   .filter(Boolean))
