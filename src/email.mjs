@@ -9,12 +9,15 @@ export function createEmailNotifierFromEnv(env = process.env) {
   const user = String(env.MEMACT_ACCESS_SMTP_USER || "").trim()
   const pass = String(env.MEMACT_ACCESS_SMTP_PASS || "")
   const from = String(env.MEMACT_ACCESS_EMAIL_FROM || "Memact <no-reply@memact.com>").trim()
+  if (!isConfiguredSecret(user) || !isConfiguredSecret(pass)) {
+    return new NoopEmailNotifier("smtp_credentials_missing")
+  }
 
   const transport = nodemailer.createTransport({
     host,
     port,
     secure,
-    auth: user && pass ? { user, pass } : undefined
+    auth: { user, pass }
   })
 
   return {
@@ -26,7 +29,16 @@ export function createEmailNotifierFromEnv(env = process.env) {
 }
 
 export class NoopEmailNotifier {
-  async send() {
-    return { sent: false, channel: "none", reason: "smtp_not_configured" }
+  constructor(reason = "smtp_not_configured") {
+    this.reason = reason
   }
+
+  async send() {
+    return { sent: false, channel: "none", reason: this.reason }
+  }
+}
+
+function isConfiguredSecret(value) {
+  const text = String(value || "").trim()
+  return Boolean(text) && !text.startsWith("your_") && !text.includes("<")
 }
