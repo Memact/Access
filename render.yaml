@@ -16,3 +16,7 @@ services:
         value: .data/access-store.json
       - key: MEMACT_ACCESS_ALLOWED_ORIGINS
         value: https://www.memact.com,https://memact.com,https://memact-website.onrender.com
+      - key: NEXT_PUBLIC_SUPABASE_URL
+        sync: false
+      - key: NEXT_PUBLIC_SUPABASE_ANON_KEY
+        sync: false

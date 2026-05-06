@@ -18,6 +18,10 @@ It owns:
 Access does not capture activity, create nodes, create edges, or read a user's
 memory graph. It decides who is allowed to ask Memact to do work.
 
+Website users sign in with Supabase. Access verifies those Supabase access
+tokens with the public Supabase anon key, then maps the verified user to local
+apps, permissions, and API keys.
+
 ## Why This Exists
 
 Memact is becoming infrastructure. Apps should be able to plug into Memact, but
@@ -72,6 +76,18 @@ Run checks:
 ```powershell
 npm run check
 ```
+
+## Supabase Session Verification
+
+Set these public Supabase values for Access too:
+
+```text
+NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your-public-anon-key
+```
+
+Do not set a service role key here. Access only needs the anon key to ask
+Supabase whether a browser session token is valid.
 
 ## API Shape
 
