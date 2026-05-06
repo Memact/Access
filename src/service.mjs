@@ -95,15 +95,28 @@ export class AccessService {
 
   async registerApp(userId, { name, description = "", redirect_urls = [] }) {
     const cleanName = String(name || "").trim()
+    const slug = normalizeAppName(cleanName)
     if (cleanName.length < 2) {
       throw new AccessError(400, "invalid_app_name", "App name must be at least 2 characters.")
     }
+    if (!slug) {
+      throw new AccessError(400, "invalid_app_name", "App name needs letters or numbers.")
+    }
     return this.mutate(async (data) => {
       assertUser(data, userId)
+      const duplicate = data.apps.some((app) => (
+        app.owner_user_id === userId &&
+        !app.revoked_at &&
+        normalizeAppName(app.slug || app.name) === slug
+      ))
+      if (duplicate) {
+        throw new AccessError(409, "duplicate_app_name", "You already have an app with this name.")
+      }
       const app = {
         id: randomId("app"),
         owner_user_id: userId,
         name: cleanName.slice(0, 80),
+        slug,
         description: String(description || "").trim().slice(0, 240),
         redirect_urls: Array.isArray(redirect_urls) ? redirect_urls.map(String).slice(0, 10) : [],
         default_scopes: [...DEFAULT_APP_SCOPES],
@@ -123,6 +136,31 @@ export class AccessService {
     return {
       apps: data.apps.filter((app) => app.owner_user_id === userId && !app.revoked_at)
     }
+  }
+
+  async deleteApp(userId, appId) {
+    return this.mutate(async (data) => {
+      const app = data.apps.find((item) => item.id === appId && item.owner_user_id === userId && !item.revoked_at)
+      if (!app) {
+        throw new AccessError(404, "app_not_found", "App not found.")
+      }
+      const deletedAt = timestamp(this.now())
+      app.revoked_at = deletedAt
+      app.updated_at = deletedAt
+      for (const key of data.api_keys) {
+        if (key.app_id === app.id && key.owner_user_id === userId && !key.revoked_at) {
+          key.revoked_at = deletedAt
+        }
+      }
+      for (const consent of data.consents) {
+        if (consent.app_id === app.id && consent.user_id === userId && !consent.revoked_at) {
+          consent.revoked_at = deletedAt
+          consent.updated_at = deletedAt
+        }
+      }
+      audit(data, userId, "app.delete", { app_id: app.id })
+      return { app: publicApp(app) }
+    })
   }
 
   async createApiKey(userId, { app_id, name = "Default key", scopes = DEFAULT_APP_SCOPES }) {
@@ -323,6 +361,14 @@ function assertPassword(password) {
   }
 }
 
+function normalizeAppName(name) {
+  return String(name || "")
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "")
+}
+
 function assertUser(data, userId) {
   const user = data.users.find((item) => item.id === userId)
   if (!user) throw new AccessError(404, "user_not_found", "User not found.")
@@ -423,6 +469,7 @@ function publicApp(app) {
     id: app.id,
     owner_user_id: app.owner_user_id,
     name: app.name,
+    slug: app.slug || normalizeAppName(app.name),
     description: app.description,
     default_scopes: app.default_scopes,
     created_at: app.created_at,

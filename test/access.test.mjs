@@ -86,3 +86,41 @@ test("unknown scopes are rejected instead of silently accepted", async () => {
     /Unknown scopes/
   )
 })
+
+test("app names must be unique per user after normalization", async () => {
+  const service = new AccessService(new MemoryStore())
+  const signup = await service.signup({ email: "apps@example.com", password: "long password" })
+
+  await service.registerApp(signup.user.id, { name: "Research Capture v2" })
+
+  await assert.rejects(
+    () => service.registerApp(signup.user.id, { name: "research/capture_v2" }),
+    /already have an app/
+  )
+})
+
+test("deleting an app hides it and revokes related keys and permissions", async () => {
+  const service = new AccessService(new MemoryStore())
+  const signup = await service.signup({ email: "delete@example.com", password: "long password" })
+  const app = await service.registerApp(signup.user.id, { name: "Delete Me" })
+  const key = await service.createApiKey(signup.user.id, {
+    app_id: app.app.id,
+    scopes: ["capture:webpage"]
+  })
+  await service.grantConsent(signup.user.id, {
+    app_id: app.app.id,
+    scopes: ["capture:webpage"]
+  })
+
+  await service.deleteApp(signup.user.id, app.app.id)
+
+  const apps = await service.listApps(signup.user.id)
+  assert.equal(apps.apps.length, 0)
+  await assert.rejects(
+    () => service.verifyApiAccess(key.key, ["capture:webpage"]),
+    /invalid or revoked|missing or revoked/
+  )
+  await service.registerApp(signup.user.id, { name: "delete-me" })
+  const recreated = await service.listApps(signup.user.id)
+  assert.equal(recreated.apps.length, 1)
+})

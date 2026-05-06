@@ -64,7 +64,12 @@ export function migrateStore(data) {
       }))
       : [],
     sessions: Array.isArray(base.sessions) ? base.sessions : [],
-    apps: Array.isArray(base.apps) ? base.apps : [],
+    apps: Array.isArray(base.apps)
+      ? base.apps.map((app) => ({
+        ...app,
+        slug: app.slug || normalizeAppName(app.name)
+      }))
+      : [],
     api_keys: Array.isArray(base.api_keys)
       ? base.api_keys.map((key) => ({
         ...key,
@@ -74,4 +79,12 @@ export function migrateStore(data) {
     consents: Array.isArray(base.consents) ? base.consents : [],
     audit_log: Array.isArray(base.audit_log) ? base.audit_log : []
   }
+}
+
+function normalizeAppName(name) {
+  return String(name || "")
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "")
 }

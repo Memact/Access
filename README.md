@@ -110,6 +110,17 @@ POST /v1/apps
 Authorization: Bearer <session_token>
 ```
 
+App names are unique per user after normalizing spaces and punctuation.
+
+Delete app:
+
+```http
+DELETE /v1/apps/<app_id>
+Authorization: Bearer <session_token>
+```
+
+Deleting an app revokes its active API keys and saved permissions.
+
 Create API key:
 
 ```http

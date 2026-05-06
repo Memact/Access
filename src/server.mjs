@@ -82,6 +82,9 @@ async function route(service, request, url, body) {
   if (request.method === "POST" && path === "/v1/apps") {
     return service.registerApp(auth.user.id, body)
   }
+  if (request.method === "DELETE" && path.startsWith("/v1/apps/")) {
+    return service.deleteApp(auth.user.id, decodeURIComponent(path.slice("/v1/apps/".length)))
+  }
   if (request.method === "GET" && path === "/v1/api-keys") {
     return service.listApiKeys(auth.user.id)
   }
@@ -129,7 +132,7 @@ function send(response, status, payload, request) {
     response.setHeader("Vary", "Origin")
   }
   response.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Memact-API-Key")
-  response.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+  response.setHeader("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS")
   response.setHeader("X-Content-Type-Options", "nosniff")
   response.setHeader("Referrer-Policy", "no-referrer")
   response.setHeader("Cache-Control", "no-store")
