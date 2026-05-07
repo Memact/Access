@@ -23,9 +23,9 @@ for (const app of store.apps || []) {
 insert into public.memact_apps (
   id, owner_user_id, name, slug, description, redirect_urls, default_scopes, created_at, updated_at, revoked_at
 )
-values (
+select
   '${escapeSql(toUuid(app.id))}'::uuid,
-  (select id from auth.users where lower(email) = lower('${escapeSql(owner.email)}') limit 1),
+  auth_user.id,
   '${escapeSql(app.name)}',
   '${escapeSql(app.slug || normalizeAppName(app.name))}',
   '${escapeSql(app.description || "")}',
@@ -34,7 +34,9 @@ values (
   '${escapeSql(app.created_at)}'::timestamptz,
   '${escapeSql(app.updated_at || app.created_at)}'::timestamptz,
   ${toTimestamp(app.revoked_at)}
-)
+from auth.users as auth_user
+where lower(auth_user.email) = lower('${escapeSql(owner.email)}')
+limit 1
 on conflict (id) do update
 set
   name = excluded.name,
@@ -53,10 +55,10 @@ for (const key of store.api_keys || []) {
 insert into public.memact_api_keys (
   id, app_id, owner_user_id, name, key_hash, key_prefix, scopes, created_at, last_used_at, revoked_at, first_used_notified_at
 )
-values (
+select
   '${escapeSql(toUuid(key.id))}'::uuid,
   '${escapeSql(toUuid(key.app_id))}'::uuid,
-  (select id from auth.users where lower(email) = lower('${escapeSql(owner.email)}') limit 1),
+  auth_user.id,
   '${escapeSql(key.name)}',
   '${escapeSql(key.key_hash)}',
   '${escapeSql(key.key_prefix)}',
@@ -65,7 +67,9 @@ values (
   ${toTimestamp(key.last_used_at)},
   ${toTimestamp(key.revoked_at)},
   ${toTimestamp(key.first_used_notified_at)}
-)
+from auth.users as auth_user
+where lower(auth_user.email) = lower('${escapeSql(owner.email)}')
+limit 1
 on conflict (id) do update
 set
   name = excluded.name,
@@ -84,15 +88,17 @@ for (const consent of store.consents || []) {
 insert into public.memact_consents (
   id, user_id, app_id, scopes, created_at, updated_at, revoked_at
 )
-values (
+select
   '${escapeSql(toUuid(consent.id))}'::uuid,
-  (select id from auth.users where lower(email) = lower('${escapeSql(owner.email)}') limit 1),
+  auth_user.id,
   '${escapeSql(toUuid(consent.app_id))}'::uuid,
   ${toTextArray(consent.scopes || [])},
   '${escapeSql(consent.created_at)}'::timestamptz,
   '${escapeSql(consent.updated_at || consent.created_at)}'::timestamptz,
   ${toTimestamp(consent.revoked_at)}
-)
+from auth.users as auth_user
+where lower(auth_user.email) = lower('${escapeSql(owner.email)}')
+limit 1
 on conflict (id) do update
 set
   scopes = excluded.scopes,
@@ -106,13 +112,15 @@ for (const entry of store.audit_log || []) {
 insert into public.memact_audit_log (
   id, user_id, action, details, created_at
 )
-values (
+select
   '${escapeSql(toUuid(entry.id))}'::uuid,
-  ${owner?.email ? `(select id from auth.users where lower(email) = lower('${escapeSql(owner.email)}') limit 1)` : "null"},
+  ${owner?.email ? "auth_user.id" : "null"},
   '${escapeSql(entry.action)}',
   '${escapeSql(JSON.stringify(entry.details || {}))}'::jsonb,
   '${escapeSql(entry.created_at)}'::timestamptz
-)
+${owner?.email ? `from auth.users as auth_user
+where lower(auth_user.email) = lower('${escapeSql(owner.email)}')
+limit 1` : ""}
 on conflict (id) do nothing;`.trim())
 }
 
