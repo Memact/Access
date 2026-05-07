@@ -3,21 +3,18 @@
 Access now deploys best as a Supabase-backed permission layer instead of a paid
 Node host.
 
-Use the SQL migration in:
+Use the full ordered SQL bundle in the Supabase SQL editor for a new install or an existing project repair/update:
+
+```text
+supabase/memact_access_full_install.sql
+```
+
+If you prefer migration-by-migration deployment, run these files in order:
 
 ```text
 supabase/migrations/20260507120000_memact_access.sql
-```
-
-For an existing Supabase project that already has Access installed, also run:
-
-```text
+supabase/migrations/20260507171000_fix_api_key_entropy.sql
 supabase/migrations/20260507190000_qualify_access_crypto.sql
-```
-
-Then run the Connect/category migration:
-
-```text
 supabase/migrations/20260507203000_connect_categories_guardrails.sql
 ```
 

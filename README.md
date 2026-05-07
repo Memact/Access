@@ -100,21 +100,18 @@ npm run check
 
 Production Access no longer needs a paid Node host.
 
-Apply the SQL migration in:
+For the easiest Website setup, run the full ordered SQL bundle in the Supabase SQL editor:
+
+```text
+supabase/memact_access_full_install.sql
+```
+
+That file combines the base install, API-key entropy repair, crypto qualification repair, and Connect/category guardrails in the correct order. If you prefer migration-by-migration deployment, run these files in order:
 
 ```text
 supabase/migrations/20260507120000_memact_access.sql
-```
-
-If the project already has the first migration, also apply the latest repair migration:
-
-```text
+supabase/migrations/20260507171000_fix_api_key_entropy.sql
 supabase/migrations/20260507190000_qualify_access_crypto.sql
-```
-
-Then apply the Connect/category migration:
-
-```text
 supabase/migrations/20260507203000_connect_categories_guardrails.sql
 ```
 
