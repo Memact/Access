@@ -960,15 +960,6 @@ alter table public.memact_apps
     'dev:code'
   ]::text[];
 
-alter table public.memact_api_keys
-  add column if not exists categories text[] not null default array[
-    'web:news',
-    'web:research',
-    'media:video',
-    'ai:assistant',
-    'dev:code'
-  ]::text[];
-
 alter table public.memact_consents
   add column if not exists categories text[] not null default array[
     'web:news',
@@ -977,6 +968,9 @@ alter table public.memact_consents
     'ai:assistant',
     'dev:code'
   ]::text[];
+
+alter table public.memact_api_keys
+  drop column if exists categories;
 
 create or replace function public.memact_known_categories()
 returns text[]
@@ -1134,7 +1128,6 @@ as $$
       'name', key.name,
       'key_prefix', key.key_prefix,
       'scopes', to_jsonb(key.scopes),
-      'categories', to_jsonb(key.categories),
       'created_at', key.created_at,
       'last_used_at', key.last_used_at,
       'revoked_at', key.revoked_at
@@ -1290,7 +1283,7 @@ $$;
 
 drop function if exists public.memact_create_api_key(uuid, text, text[]);
 drop function if exists public.memact_create_api_key(uuid, text, text[], text[]);
-create or replace function public.memact_create_api_key(app_id_input uuid, key_name_input text default 'Default app key', scopes_input text[] default array[]::text[], categories_input text[] default array['web:news','web:research','media:video','ai:assistant','dev:code']::text[])
+create or replace function public.memact_create_api_key(app_id_input uuid, key_name_input text default 'Default app key', scopes_input text[] default array[]::text[])
 returns jsonb
 language plpgsql
 security definer
@@ -1301,7 +1294,6 @@ declare
   target_app public.memact_apps%rowtype;
   created_key public.memact_api_keys%rowtype;
   clean_scopes text[] := public.memact_clean_allowed_values(scopes_input, public.memact_known_scopes());
-  clean_categories text[] := public.memact_clean_allowed_values(categories_input, public.memact_known_categories());
   raw_key text := 'mka_' || encode(gen_random_bytes(24), 'hex');
 begin
   select * into target_app
@@ -1311,24 +1303,19 @@ begin
     and app.revoked_at is null;
   if not found then raise exception 'App not found.'; end if;
   if array_length(clean_scopes, 1) is null then raise exception 'At least one valid scope is required.'; end if;
-  if array_length(clean_categories, 1) is null then raise exception 'At least one activity category is required.'; end if;
-  if not clean_categories <@ target_app.default_categories then
-    raise exception 'This key asks for categories outside this app registration.';
-  end if;
 
-  insert into public.memact_api_keys (app_id, owner_user_id, name, key_hash, key_prefix, scopes, categories)
+  insert into public.memact_api_keys (app_id, owner_user_id, name, key_hash, key_prefix, scopes)
   values (
     target_app.id,
     current_user_id,
     left(trim(coalesce(key_name_input, 'Default app key')), 80),
     encode(digest(raw_key::text, 'sha256'::text), 'hex'),
     left(raw_key, 12),
-    clean_scopes,
-    clean_categories
+    clean_scopes
   )
   returning * into created_key;
 
-  perform public.memact_audit(current_user_id, 'api_key.create', jsonb_build_object('app_id', target_app.id, 'key_id', created_key.id, 'scopes', to_jsonb(clean_scopes), 'categories', to_jsonb(clean_categories)));
+  perform public.memact_audit(current_user_id, 'api_key.create', jsonb_build_object('app_id', target_app.id, 'key_id', created_key.id, 'scopes', to_jsonb(clean_scopes)));
 
   return jsonb_build_object(
     'api_key', jsonb_build_object(
@@ -1338,7 +1325,6 @@ begin
       'name', created_key.name,
       'key_prefix', created_key.key_prefix,
       'scopes', to_jsonb(created_key.scopes),
-      'categories', to_jsonb(created_key.categories),
       'created_at', created_key.created_at,
       'last_used_at', created_key.last_used_at,
       'revoked_at', created_key.revoked_at
@@ -1462,9 +1448,7 @@ begin
   from unnest(target_key.scopes) scope
   where scope = any(target_consent.scopes);
 
-  select coalesce(array_agg(category), array[]::text[]) into effective_categories
-  from unnest(target_key.categories) category
-  where category = any(target_consent.categories);
+  effective_categories := public.memact_clean_allowed_values(target_consent.categories, public.memact_known_categories());
 
   allowed := clean_required_scopes <@ effective_scopes and clean_required_categories <@ effective_categories;
   if allowed then update public.memact_api_keys set last_used_at = timezone('utc', now()) where id = target_key.id; end if;
@@ -1474,13 +1458,13 @@ begin
     'user_id', target_consent.user_id,
     'connection_id', target_consent.id,
     'app', jsonb_build_object('id', target_app.id, 'name', target_app.name, 'slug', target_app.slug, 'developer_url', target_app.developer_url),
-    'key', jsonb_build_object('id', target_key.id, 'key_prefix', target_key.key_prefix, 'scopes', to_jsonb(target_key.scopes), 'categories', to_jsonb(target_key.categories)),
+    'key', jsonb_build_object('id', target_key.id, 'key_prefix', target_key.key_prefix, 'scopes', to_jsonb(target_key.scopes)),
     'scopes', to_jsonb(effective_scopes),
     'categories', to_jsonb(effective_categories),
     'missing_scopes', to_jsonb(array(select scope from unnest(clean_required_scopes) scope where not scope = any(effective_scopes))),
     'missing_categories', to_jsonb(array(select category from unnest(clean_required_categories) category where not category = any(effective_categories))),
     'policy', jsonb_build_object('plan', 'free_unlimited', 'graph_read_allowed', 'memory:read_graph' = any(effective_scopes)),
-    'error', case when allowed then null else jsonb_build_object('code', 'scope_or_category_denied', 'message', 'API key or user permissions do not include the requested scopes or categories.') end
+    'error', case when allowed then null else jsonb_build_object('code', 'scope_or_category_denied', 'message', 'API key scope or app permission does not include the requested access.') end
   );
 end;
 $$;
@@ -1489,7 +1473,7 @@ grant execute on function public.memact_policy() to anon, authenticated;
 grant execute on function public.memact_dashboard() to authenticated;
 grant execute on function public.memact_create_app(text, text, jsonb, text, text[]) to authenticated;
 grant execute on function public.memact_grant_consent(uuid, text[], text[]) to authenticated;
-grant execute on function public.memact_create_api_key(uuid, text, text[], text[]) to authenticated;
+grant execute on function public.memact_create_api_key(uuid, text, text[]) to authenticated;
 grant execute on function public.memact_get_connect_app(uuid, text[], text[]) to authenticated;
 grant execute on function public.memact_connect_app(uuid, text[], text[]) to authenticated;
 grant execute on function public.memact_verify_api_key(text, text[], text[], uuid) to anon, authenticated;

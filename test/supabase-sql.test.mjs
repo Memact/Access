@@ -24,3 +24,14 @@ test("Supabase SQL asks PostgREST to reload the RPC schema cache", async () => {
   assert.match(migration, /notify pgrst, 'reload schema';/)
   assert.match(fullInstall, /notify pgrst, 'reload schema';/)
 })
+
+test("activity categories are not stored on API keys", async () => {
+  const migration = await fs.readFile(latestMigrationPath, "utf8")
+  const fullInstall = await fs.readFile(fullInstallPath, "utf8")
+
+  for (const sql of [migration, fullInstall]) {
+    assert.match(sql, /alter table public\.memact_api_keys\s+drop column if exists categories;/)
+    assert.doesNotMatch(sql, /insert into public\.memact_api_keys \([^)]*categories/i)
+    assert.doesNotMatch(sql, /target_key\.categories|created_key\.categories|key\.categories/)
+  }
+})

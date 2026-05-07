@@ -179,12 +179,11 @@ export class AccessService {
     })
   }
 
-  async createApiKey(userId, { app_id, name = "Default key", scopes = DEFAULT_APP_SCOPES, categories = DEFAULT_APP_CATEGORIES }) {
+  async createApiKey(userId, { app_id, name = "Default key", scopes = DEFAULT_APP_SCOPES }) {
     const unknown = unknownScopes(scopes)
     if (unknown.length) {
       throw new AccessError(400, "unknown_scope", `Unknown scopes: ${unknown.join(", ")}`)
     }
-    const cleanCategories = assertCategories(categories)
     const cleanScopes = normalizeScopes(scopes)
     if (!cleanScopes.length) {
       throw new AccessError(400, "missing_scopes", "At least one valid scope is required.")
@@ -203,13 +202,12 @@ export class AccessService {
         key_hash: hashSecret(rawKey),
         key_prefix: rawKey.slice(0, 12),
         scopes: cleanScopes,
-        categories: cleanCategories,
         created_at: timestamp(this.now()),
         last_used_at: null,
         revoked_at: null
       }
       data.api_keys.push(apiKey)
-      audit(data, userId, "api_key.create", { app_id: app.id, key_id: apiKey.id, scopes: cleanScopes, categories: cleanCategories })
+      audit(data, userId, "api_key.create", { app_id: app.id, key_id: apiKey.id, scopes: cleanScopes })
       return { api_key: publicApiKey(apiKey), key: rawKey }
     })
   }
@@ -310,7 +308,7 @@ export class AccessService {
         throw new AccessError(403, "consent_required", "User consent is required for this app.")
       }
       const effectiveScopes = intersectScopes(key.scopes, consent.scopes)
-      const effectiveCategories = intersectCategories(key.categories || DEFAULT_APP_CATEGORIES, consent.categories || DEFAULT_APP_CATEGORIES)
+      const effectiveCategories = normalizeCategories(consent.categories || app.default_categories || DEFAULT_APP_CATEGORIES)
       const allowed = hasAllScopes(effectiveScopes, cleanRequired)
       const categoriesAllowed = hasAllCategories(effectiveCategories, cleanRequiredCategories)
       key.last_used_at = timestamp(this.now())
@@ -325,7 +323,7 @@ export class AccessService {
         throw new AccessError(403, "scope_denied", "API key or consent does not include the required scopes.")
       }
       if (!categoriesAllowed) {
-        throw new AccessError(403, "category_denied", "API key or consent does not include the required activity categories.")
+        throw new AccessError(403, "category_denied", "App permission does not include the required activity categories.")
       }
       return {
         allowed: true,
@@ -590,7 +588,6 @@ function publicApiKey(apiKey) {
     name: apiKey.name,
     key_prefix: apiKey.key_prefix,
     scopes: apiKey.scopes,
-    categories: apiKey.categories || DEFAULT_APP_CATEGORIES,
     created_at: apiKey.created_at,
     last_used_at: apiKey.last_used_at,
     revoked_at: apiKey.revoked_at

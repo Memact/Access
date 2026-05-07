@@ -87,7 +87,7 @@ test("API access is limited by activity categories", async () => {
   const key = await service.createApiKey(signup.user.id, {
     app_id: app.app.id,
     scopes: ["capture:webpage", "schema:write"],
-    categories: ["web:news"]
+    categories: ["ai:assistant"]
   })
   await service.grantConsent(signup.user.id, {
     app_id: app.app.id,
@@ -98,6 +98,7 @@ test("API access is limited by activity categories", async () => {
   const allowed = await service.verifyApiAccess(key.key, ["capture:webpage"], ["web:news"])
   assert.equal(allowed.allowed, true)
   assert.deepEqual(allowed.categories, ["web:news"])
+  assert.equal(Object.hasOwn(key.api_key, "categories"), false)
 
   await assert.rejects(
     () => service.verifyApiAccess(key.key, ["capture:webpage"], ["ai:assistant"]),
@@ -115,8 +116,7 @@ test("connect flow grants a user-specific connection id", async () => {
   })
   const key = await service.createApiKey(developer.user.id, {
     app_id: app.app.id,
-    scopes: ["memory:read_summary"],
-    categories: ["web:research"]
+    scopes: ["memory:read_summary"]
   })
 
   const preview = await service.getConnectApp(user.user.id, {
