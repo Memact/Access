@@ -18,9 +18,9 @@ It owns:
 Access does not capture activity, create nodes, create edges, or read a user's
 memory graph. It decides who is allowed to ask Memact to do work.
 
-Website users sign in with Supabase. Access verifies those Supabase access
-tokens with the public Supabase anon key, then maps the verified user to local
-apps, permissions, and API keys.
+Website users sign in with Supabase. Access now works best as a Supabase-backed
+permission layer too, so auth, apps, permissions, and API keys can live in the
+same durable backend.
 
 ## Why This Exists
 
@@ -60,6 +60,8 @@ Raw graph reads are intentionally separate from capture/schema write scopes.
 
 ## Run Locally
 
+The old local Node server still exists for local fallback and test coverage:
+
 ```powershell
 npm install
 npm run dev
@@ -77,6 +79,30 @@ Run checks:
 npm run check
 ```
 
+## Supabase-Backed Access
+
+Production Access no longer needs a paid Node host.
+
+Apply the SQL migration in:
+
+```text
+supabase/migrations/20260507120000_memact_access.sql
+```
+
+Then point Website at your Supabase project only.
+
+The Supabase-backed Access layer creates:
+
+- `memact_apps`
+- `memact_api_keys`
+- `memact_consents`
+- `memact_audit_log`
+- RPC functions for policy, dashboard, app creation, consent, key creation, and key verification
+
+Helper notes live in:
+
+[`supabase/README.md`](./supabase/README.md)
+
 ## Supabase Session Verification
 
 Set these public Supabase values for Access too:
@@ -89,58 +115,49 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=your-public-anon-key
 Do not set a service role key here. Access only needs the anon key to ask
 Supabase whether a browser session token is valid.
 
-## API Shape
+## Import Existing Local Access Data
 
-Signup:
+If you already created apps or keys with the old JSON store, generate a SQL
+seed file:
 
-```http
-POST /v1/auth/signup
+```powershell
+npm run seed:supabase
 ```
 
-Signin:
+That writes:
 
-```http
-POST /v1/auth/signin
+```text
+supabase/seed-from-local.sql
 ```
 
-Register app:
+Run it after the main Supabase migration. It maps old app/key/consent rows to
+Supabase users by email.
 
-```http
-POST /v1/apps
-Authorization: Bearer <session_token>
-```
+## Access Surface
 
-App names are unique per user after normalizing spaces and punctuation.
+Primary production surface:
 
-Delete app:
+- `memact_policy()`
+- `memact_dashboard()`
+- `memact_create_app(...)`
+- `memact_delete_app(...)`
+- `memact_grant_consent(...)`
+- `memact_create_api_key(...)`
+- `memact_revoke_api_key(...)`
+- `memact_verify_api_key(...)`
 
-```http
-DELETE /v1/apps/<app_id>
-Authorization: Bearer <session_token>
-```
+These run as Supabase RPC functions after the SQL migration is applied.
 
+Legacy local HTTP surface still exists for local fallback:
+
+- `POST /v1/apps`
+- `DELETE /v1/apps/<app_id>`
+- `POST /v1/api-keys`
+- `POST /v1/consents`
+- `POST /v1/access/verify`
+
+App names stay unique per user after normalizing spaces and punctuation.
 Deleting an app revokes its active API keys and saved permissions.
-
-Create API key:
-
-```http
-POST /v1/api-keys
-Authorization: Bearer <session_token>
-```
-
-Grant consent:
-
-```http
-POST /v1/consents
-Authorization: Bearer <session_token>
-```
-
-Verify app access:
-
-```http
-POST /v1/access/verify
-X-Memact-API-Key: <api_key>
-```
 
 ## Security Notes
 
@@ -153,14 +170,11 @@ X-Memact-API-Key: <api_key>
 
 ## Render
 
-`render.yaml` defines a Node web service for Access.
+`render.yaml` is now a legacy fallback for the old Node Access server.
 
-If Blueprint setup fails, use the direct Dashboard path in
-[`RENDER_DIRECT_DEPLOY.md`](./RENDER_DIRECT_DEPLOY.md).
-
-Render's free web service filesystem is not a durable database. It is fine for
-testing the portal, but production Access should move the store to a managed
-database or persistent storage.
+The preferred production path is Supabase-backed Access, because it avoids
+Render billing for a backend service and gives durable storage instead of a
+local JSON file.
 
 ## License
 

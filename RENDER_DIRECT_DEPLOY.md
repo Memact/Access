@@ -1,8 +1,10 @@
 # Render Direct Deploy
 
-Use this if Render Blueprint setup fails.
+Use this only if you deliberately want the old local-JSON Access server on a
+host.
 
-This keeps Access as a Node web service. It is not a downgrade from the Blueprint path.
+The recommended production path is now Supabase-backed Access instead of a paid
+Node backend. See [`supabase/README.md`](./supabase/README.md).
 
 ## 1. Create The Service
 

@@ -1,6 +1,7 @@
 services:
   - type: web
     name: memact-access
+    repo: https://github.com/Memact/Access
     runtime: node
     branch: main
     autoDeployTrigger: commit
