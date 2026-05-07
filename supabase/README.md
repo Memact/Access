@@ -9,6 +9,12 @@ Use the SQL migration in:
 supabase/migrations/20260507120000_memact_access.sql
 ```
 
+For an existing Supabase project that already has Access installed, also run:
+
+```text
+supabase/migrations/20260507190000_qualify_access_crypto.sql
+```
+
 That migration creates:
 
 - `memact_apps`
@@ -45,10 +51,11 @@ npm run seed:supabase
 This writes:
 
 ```text
-supabase/seed-from-local.sql
+.data/supabase-seed-from-local.sql
 ```
 
-Run that SQL after the main migration. It maps old Access rows to Supabase
+Run that SQL after the main migration. The generated file can include local
+account emails, so it is kept under `.data/` and must not be committed. It maps old Access rows to Supabase
 users by email.
 
 ## Why This Path

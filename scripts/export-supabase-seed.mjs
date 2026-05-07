@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url"
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const repoRoot = path.resolve(__dirname, "..")
 const inputPath = process.argv[2] ? path.resolve(process.argv[2]) : path.join(repoRoot, ".data", "access-store.json")
-const outputPath = process.argv[3] ? path.resolve(process.argv[3]) : path.join(repoRoot, "supabase", "seed-from-local.sql")
+const outputPath = process.argv[3] ? path.resolve(process.argv[3]) : path.join(repoRoot, ".data", "supabase-seed-from-local.sql")
 
 const raw = fs.readFileSync(inputPath, "utf8")
 const store = JSON.parse(raw)

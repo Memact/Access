@@ -2,7 +2,7 @@ create or replace function public.memact_create_api_key(app_id_input uuid, key_n
 returns jsonb
 language plpgsql
 security definer
-set search_path = public
+set search_path = public, extensions
 as $$
 declare
   current_user_id uuid := public.memact_require_authenticated_user();

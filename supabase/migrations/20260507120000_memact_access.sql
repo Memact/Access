@@ -107,7 +107,7 @@ create or replace function public.memact_audit(actor_user_id uuid, actor_action 
 returns void
 language sql
 security definer
-set search_path = public
+set search_path = public, extensions
 as $$
   insert into public.memact_audit_log (user_id, action, details)
   values (actor_user_id, actor_action, coalesce(actor_details, '{}'::jsonb));
@@ -118,7 +118,7 @@ returns uuid
 language plpgsql
 stable
 security definer
-set search_path = public
+set search_path = public, extensions
 as $$
 declare
   current_user_id uuid;
@@ -136,7 +136,7 @@ returns jsonb
 language sql
 stable
 security definer
-set search_path = public
+set search_path = public, extensions
 as $$
   select jsonb_build_object(
     'plan', 'free_unlimited',
@@ -219,7 +219,7 @@ returns jsonb
 language sql
 stable
 security definer
-set search_path = public
+set search_path = public, extensions
 as $$
   with current_actor as (
     select public.memact_require_authenticated_user() as user_id
@@ -280,7 +280,7 @@ create or replace function public.memact_create_app(app_name text, app_descripti
 returns jsonb
 language plpgsql
 security definer
-set search_path = public
+set search_path = public, extensions
 as $$
 declare
   current_user_id uuid := public.memact_require_authenticated_user();
@@ -346,7 +346,7 @@ create or replace function public.memact_delete_app(app_id_input uuid)
 returns jsonb
 language plpgsql
 security definer
-set search_path = public
+set search_path = public, extensions
 as $$
 declare
   current_user_id uuid := public.memact_require_authenticated_user();
@@ -401,7 +401,7 @@ create or replace function public.memact_grant_consent(app_id_input uuid, scopes
 returns jsonb
 language plpgsql
 security definer
-set search_path = public
+set search_path = public, extensions
 as $$
 declare
   current_user_id uuid := public.memact_require_authenticated_user();
@@ -457,7 +457,7 @@ create or replace function public.memact_create_api_key(app_id_input uuid, key_n
 returns jsonb
 language plpgsql
 security definer
-set search_path = public
+set search_path = public, extensions
 as $$
 declare
   current_user_id uuid := public.memact_require_authenticated_user();
@@ -530,7 +530,7 @@ create or replace function public.memact_revoke_api_key(key_id_input uuid)
 returns jsonb
 language plpgsql
 security definer
-set search_path = public
+set search_path = public, extensions
 as $$
 declare
   current_user_id uuid := public.memact_require_authenticated_user();
@@ -568,7 +568,7 @@ create or replace function public.memact_verify_api_key(api_key_input text, requ
 returns jsonb
 language plpgsql
 security definer
-set search_path = public
+set search_path = public, extensions
 as $$
 declare
   target_key public.memact_api_keys%rowtype;

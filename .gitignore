@@ -2,6 +2,7 @@
 .env.*
 !.env.example
 .data/
+supabase/seed-from-local.sql
 node_modules/
 coverage/
 *.log

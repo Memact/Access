@@ -89,6 +89,12 @@ Apply the SQL migration in:
 supabase/migrations/20260507120000_memact_access.sql
 ```
 
+If the project already has the first migration, also apply the latest repair migration:
+
+```text
+supabase/migrations/20260507190000_qualify_access_crypto.sql
+```
+
 Then point Website at your Supabase project only.
 
 The Supabase-backed Access layer creates:
@@ -127,10 +133,11 @@ npm run seed:supabase
 That writes:
 
 ```text
-supabase/seed-from-local.sql
+.data/supabase-seed-from-local.sql
 ```
 
-Run it after the main Supabase migration. It maps old app/key/consent rows to
+Run it after the main Supabase migration. The generated file can include local
+account emails, so it is kept under `.data/` and must not be committed. It maps old app/key/consent rows to
 Supabase users by email.
 
 ## Access Surface
