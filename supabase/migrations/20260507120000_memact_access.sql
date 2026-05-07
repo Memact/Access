@@ -221,7 +221,7 @@ stable
 security definer
 set search_path = public
 as $$
-  with current_user as (
+  with current_actor as (
     select public.memact_require_authenticated_user() as user_id
   ),
   apps as (
@@ -236,7 +236,7 @@ as $$
       'revoked_at', app.revoked_at
     ) order by app.created_at), '[]'::jsonb) as value
     from public.memact_apps app
-    join current_user on current_user.user_id = app.owner_user_id
+    join current_actor on current_actor.user_id = app.owner_user_id
     where app.revoked_at is null
   ),
   api_keys as (
@@ -252,7 +252,7 @@ as $$
       'revoked_at', key.revoked_at
     ) order by key.created_at desc), '[]'::jsonb) as value
     from public.memact_api_keys key
-    join current_user on current_user.user_id = key.owner_user_id
+    join current_actor on current_actor.user_id = key.owner_user_id
   ),
   consents as (
     select coalesce(jsonb_agg(jsonb_build_object(
@@ -265,7 +265,7 @@ as $$
       'revoked_at', consent.revoked_at
     ) order by consent.created_at desc), '[]'::jsonb) as value
     from public.memact_consents consent
-    join current_user on current_user.user_id = consent.user_id
+    join current_actor on current_actor.user_id = consent.user_id
     where consent.revoked_at is null
   )
   select jsonb_build_object(
