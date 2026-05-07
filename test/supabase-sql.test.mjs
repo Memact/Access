@@ -1,0 +1,26 @@
+import test from "node:test"
+import assert from "node:assert/strict"
+import fs from "node:fs/promises"
+
+const latestMigrationPath = new URL("../supabase/migrations/20260507203000_connect_categories_guardrails.sql", import.meta.url)
+const fullInstallPath = new URL("../supabase/memact_access_full_install.sql", import.meta.url)
+
+test("latest Supabase SQL avoids brittle schema-qualified pgcrypto calls", async () => {
+  const migration = await fs.readFile(latestMigrationPath, "utf8")
+  const fullInstall = await fs.readFile(fullInstallPath, "utf8")
+
+  for (const sql of [migration, fullInstall]) {
+    assert.equal(sql.includes("extensions.digest("), false)
+    assert.equal(sql.includes("extensions.gen_random_bytes("), false)
+    assert.match(sql, /digest\([^)]*'sha256'::text\)/)
+    assert.match(sql, /gen_random_bytes\(24\)/)
+  }
+})
+
+test("Supabase SQL asks PostgREST to reload the RPC schema cache", async () => {
+  const migration = await fs.readFile(latestMigrationPath, "utf8")
+  const fullInstall = await fs.readFile(fullInstallPath, "utf8")
+
+  assert.match(migration, /notify pgrst, 'reload schema';/)
+  assert.match(fullInstall, /notify pgrst, 'reload schema';/)
+})

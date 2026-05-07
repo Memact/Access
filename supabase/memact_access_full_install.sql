@@ -1302,7 +1302,7 @@ declare
   created_key public.memact_api_keys%rowtype;
   clean_scopes text[] := public.memact_clean_allowed_values(scopes_input, public.memact_known_scopes());
   clean_categories text[] := public.memact_clean_allowed_values(categories_input, public.memact_known_categories());
-  raw_key text := 'mka_' || encode(extensions.gen_random_bytes(24), 'hex');
+  raw_key text := 'mka_' || encode(gen_random_bytes(24), 'hex');
 begin
   select * into target_app
   from public.memact_apps app
@@ -1321,7 +1321,7 @@ begin
     target_app.id,
     current_user_id,
     left(trim(coalesce(key_name_input, 'Default app key')), 80),
-    encode(extensions.digest(raw_key, 'sha256'), 'hex'),
+    encode(digest(raw_key::text, 'sha256'::text), 'hex'),
     left(raw_key, 12),
     clean_scopes,
     clean_categories
@@ -1436,7 +1436,7 @@ declare
 begin
   select * into target_key
   from public.memact_api_keys key
-  where key.key_hash = encode(extensions.digest(coalesce(api_key_input, ''), 'sha256'), 'hex')
+  where key.key_hash = encode(digest(coalesce(api_key_input, '')::text, 'sha256'::text), 'hex')
     and key.revoked_at is null;
   if not found then return jsonb_build_object('allowed', false, 'error', jsonb_build_object('code', 'invalid_api_key', 'message', 'API key is invalid or revoked.')); end if;
 
@@ -1493,3 +1493,5 @@ grant execute on function public.memact_create_api_key(uuid, text, text[], text[
 grant execute on function public.memact_get_connect_app(uuid, text[], text[]) to authenticated;
 grant execute on function public.memact_connect_app(uuid, text[], text[]) to authenticated;
 grant execute on function public.memact_verify_api_key(text, text[], text[], uuid) to anon, authenticated;
+
+notify pgrst, 'reload schema';

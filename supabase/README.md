@@ -9,6 +9,8 @@ Use the full ordered SQL bundle in the Supabase SQL editor for a new install or 
 supabase/memact_access_full_install.sql
 ```
 
+Run the full bundle again whenever the portal reports a missing column, missing RPC function, or stale schema cache. It is idempotent, so rerunning it repairs older installs without deleting apps, keys, or permissions. The script ends with a PostgREST schema reload notification so newly added RPC arguments become visible to the Website portal.
+
 If you prefer migration-by-migration deployment, run these files in order:
 
 ```text
