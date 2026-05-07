@@ -1,5 +1,18 @@
 import { hashPassword, hashSecret, randomId, randomToken, verifyPassword } from "./crypto.mjs"
-import { DEFAULT_APP_SCOPES, hasAllScopes, normalizeScopes, SCOPE_DEFINITIONS, unknownScopes } from "./policy.mjs"
+import {
+  CATEGORY_DEFINITIONS,
+  DEFAULT_APP_CATEGORIES,
+  DEFAULT_APP_SCOPES,
+  hasAllCategories,
+  hasAllScopes,
+  KNOWLEDGE_GRAPH_CONTRACT,
+  normalizeCategories,
+  normalizeScopes,
+  SAFETY_RULES,
+  SCOPE_DEFINITIONS,
+  unknownCategories,
+  unknownScopes
+} from "./policy.mjs"
 
 const SESSION_TTL_MS = 1000 * 60 * 60 * 24 * 30
 
@@ -93,9 +106,10 @@ export class AccessService {
     })
   }
 
-  async registerApp(userId, { name, description = "", redirect_urls = [] }) {
+  async registerApp(userId, { name, description = "", redirect_urls = [], developer_url = "", categories = DEFAULT_APP_CATEGORIES }) {
     const cleanName = String(name || "").trim()
     const slug = normalizeAppName(cleanName)
+    const cleanCategories = assertCategories(categories)
     if (cleanName.length < 2) {
       throw new AccessError(400, "invalid_app_name", "App name must be at least 2 characters.")
     }
@@ -118,8 +132,10 @@ export class AccessService {
         name: cleanName.slice(0, 80),
         slug,
         description: String(description || "").trim().slice(0, 240),
+        developer_url: normalizeOptionalUrl(developer_url),
         redirect_urls: Array.isArray(redirect_urls) ? redirect_urls.map(String).slice(0, 10) : [],
         default_scopes: [...DEFAULT_APP_SCOPES],
+        default_categories: cleanCategories,
         created_at: timestamp(this.now()),
         updated_at: timestamp(this.now()),
         revoked_at: null
@@ -163,11 +179,12 @@ export class AccessService {
     })
   }
 
-  async createApiKey(userId, { app_id, name = "Default key", scopes = DEFAULT_APP_SCOPES }) {
+  async createApiKey(userId, { app_id, name = "Default key", scopes = DEFAULT_APP_SCOPES, categories = DEFAULT_APP_CATEGORIES }) {
     const unknown = unknownScopes(scopes)
     if (unknown.length) {
       throw new AccessError(400, "unknown_scope", `Unknown scopes: ${unknown.join(", ")}`)
     }
+    const cleanCategories = assertCategories(categories)
     const cleanScopes = normalizeScopes(scopes)
     if (!cleanScopes.length) {
       throw new AccessError(400, "missing_scopes", "At least one valid scope is required.")
@@ -186,12 +203,13 @@ export class AccessService {
         key_hash: hashSecret(rawKey),
         key_prefix: rawKey.slice(0, 12),
         scopes: cleanScopes,
+        categories: cleanCategories,
         created_at: timestamp(this.now()),
         last_used_at: null,
         revoked_at: null
       }
       data.api_keys.push(apiKey)
-      audit(data, userId, "api_key.create", { app_id: app.id, key_id: apiKey.id, scopes: cleanScopes })
+      audit(data, userId, "api_key.create", { app_id: app.id, key_id: apiKey.id, scopes: cleanScopes, categories: cleanCategories })
       return { api_key: publicApiKey(apiKey), key: rawKey }
     })
   }
@@ -216,20 +234,26 @@ export class AccessService {
     })
   }
 
-  async grantConsent(userId, { app_id, scopes = DEFAULT_APP_SCOPES }) {
+  async grantConsent(userId, { app_id, scopes = DEFAULT_APP_SCOPES, categories = DEFAULT_APP_CATEGORIES }) {
     const unknown = unknownScopes(scopes)
     if (unknown.length) {
       throw new AccessError(400, "unknown_scope", `Unknown scopes: ${unknown.join(", ")}`)
     }
+    const cleanCategories = assertCategories(categories)
     const cleanScopes = normalizeScopes(scopes)
     return this.mutate(async (data) => {
       const app = data.apps.find((item) => item.id === app_id && !item.revoked_at)
       if (!app) throw new AccessError(404, "app_not_found", "App not found.")
+      const allowedCategories = normalizeCategories(app.default_categories || DEFAULT_APP_CATEGORIES)
+      if (!hasAllCategories(allowedCategories, cleanCategories)) {
+        throw new AccessError(400, "category_denied", "This app is not registered for one or more selected activity categories.")
+      }
       const existing = data.consents.find((item) => item.user_id === userId && item.app_id === app.id && !item.revoked_at)
       if (existing) {
         existing.scopes = cleanScopes
+        existing.categories = cleanCategories
         existing.updated_at = timestamp(this.now())
-        audit(data, userId, "consent.update", { app_id: app.id, scopes: cleanScopes })
+        audit(data, userId, "consent.update", { app_id: app.id, scopes: cleanScopes, categories: cleanCategories })
         return { consent: existing }
       }
       const consent = {
@@ -237,12 +261,13 @@ export class AccessService {
         user_id: userId,
         app_id: app.id,
         scopes: cleanScopes,
+        categories: cleanCategories,
         created_at: timestamp(this.now()),
         updated_at: timestamp(this.now()),
         revoked_at: null
       }
       data.consents.push(consent)
-      audit(data, userId, "consent.grant", { app_id: app.id, scopes: cleanScopes })
+      audit(data, userId, "consent.grant", { app_id: app.id, scopes: cleanScopes, categories: cleanCategories })
       return { consent }
     })
   }
@@ -265,8 +290,9 @@ export class AccessService {
     })
   }
 
-  async verifyApiAccess(apiKey, requiredScopes = []) {
+  async verifyApiAccess(apiKey, requiredScopes = [], requiredCategories = [], connectionId = "") {
     const cleanRequired = normalizeScopes(requiredScopes)
+    const cleanRequiredCategories = normalizeCategories(requiredCategories)
     const keyHash = hashSecret(apiKey || "")
     return this.mutate(async (data) => {
       const key = data.api_keys.find((item) => item.key_hash === keyHash && !item.revoked_at)
@@ -275,26 +301,39 @@ export class AccessService {
       }
       const app = data.apps.find((item) => item.id === key.app_id && !item.revoked_at)
       if (!app) throw new AccessError(401, "app_revoked", "App is missing or revoked.")
-      const consent = data.consents.find((item) => item.user_id === key.owner_user_id && item.app_id === key.app_id && !item.revoked_at)
+      const consent = data.consents.find((item) => (
+        item.app_id === key.app_id &&
+        !item.revoked_at &&
+        (connectionId ? item.id === connectionId : item.user_id === key.owner_user_id)
+      ))
       if (!consent) {
         throw new AccessError(403, "consent_required", "User consent is required for this app.")
       }
       const effectiveScopes = intersectScopes(key.scopes, consent.scopes)
+      const effectiveCategories = intersectCategories(key.categories || DEFAULT_APP_CATEGORIES, consent.categories || DEFAULT_APP_CATEGORIES)
       const allowed = hasAllScopes(effectiveScopes, cleanRequired)
+      const categoriesAllowed = hasAllCategories(effectiveCategories, cleanRequiredCategories)
       key.last_used_at = timestamp(this.now())
-      audit(data, key.owner_user_id, allowed ? "access.allow" : "access.deny", {
+      audit(data, key.owner_user_id, allowed && categoriesAllowed ? "access.allow" : "access.deny", {
         app_id: app.id,
         required_scopes: cleanRequired,
-        effective_scopes: effectiveScopes
+        required_categories: cleanRequiredCategories,
+        effective_scopes: effectiveScopes,
+        effective_categories: effectiveCategories
       })
       if (!allowed) {
         throw new AccessError(403, "scope_denied", "API key or consent does not include the required scopes.")
       }
+      if (!categoriesAllowed) {
+        throw new AccessError(403, "category_denied", "API key or consent does not include the required activity categories.")
+      }
       return {
         allowed: true,
-        user_id: key.owner_user_id,
+        user_id: consent.user_id,
+        connection_id: consent.id,
         app: publicApp(app),
         scopes: effectiveScopes,
+        categories: effectiveCategories,
         policy: {
           plan: "free_unlimited",
           graph_read_allowed: effectiveScopes.includes("memory:read_graph")
@@ -303,11 +342,45 @@ export class AccessService {
     })
   }
 
+  async getConnectApp(userId, { app_id, scopes = [], categories = [] }) {
+    const cleanScopes = normalizeScopes(scopes)
+    const cleanCategories = normalizeCategories(categories)
+    const data = await this.store.read()
+    assertUser(data, userId)
+    const app = data.apps.find((item) => item.id === app_id && !item.revoked_at)
+    if (!app) throw new AccessError(404, "app_not_found", "App not found.")
+    return {
+      app: publicApp(app),
+      requested_scopes: cleanScopes.length ? cleanScopes : normalizeScopes(app.default_scopes || DEFAULT_APP_SCOPES),
+      requested_categories: cleanCategories.length ? cleanCategories : normalizeCategories(app.default_categories || DEFAULT_APP_CATEGORIES),
+      scopes: SCOPE_DEFINITIONS,
+      activity_categories: CATEGORY_DEFINITIONS,
+      safety_rules: SAFETY_RULES
+    }
+  }
+
+  async connectApp(userId, { app_id, scopes = [], categories = [] }) {
+    const appInfo = await this.getConnectApp(userId, { app_id, scopes, categories })
+    const allowedCategories = normalizeCategories(appInfo.app.default_categories || DEFAULT_APP_CATEGORIES)
+    if (!hasAllCategories(allowedCategories, appInfo.requested_categories)) {
+      throw new AccessError(400, "category_denied", "This app is not registered for one or more requested categories.")
+    }
+    return this.grantConsent(userId, {
+      app_id,
+      scopes: appInfo.requested_scopes,
+      categories: appInfo.requested_categories
+    })
+  }
+
   async policy() {
     return {
       plan: "free_unlimited",
       scopes: SCOPE_DEFINITIONS,
-      default_app_scopes: DEFAULT_APP_SCOPES
+      default_app_scopes: DEFAULT_APP_SCOPES,
+      activity_categories: CATEGORY_DEFINITIONS,
+      default_app_categories: DEFAULT_APP_CATEGORIES,
+      safety_rules: SAFETY_RULES,
+      knowledge_graph_contract: KNOWLEDGE_GRAPH_CONTRACT
     }
   }
 
@@ -367,6 +440,30 @@ function normalizeAppName(name) {
     .trim()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-|-$/g, "")
+}
+
+function normalizeOptionalUrl(value) {
+  const raw = String(value || "").trim()
+  if (!raw) return ""
+  try {
+    const url = new URL(raw)
+    if (!["https:", "http:"].includes(url.protocol)) return ""
+    return url.toString()
+  } catch {
+    return ""
+  }
+}
+
+function assertCategories(categories) {
+  const unknown = unknownCategories(categories)
+  if (unknown.length) {
+    throw new AccessError(400, "unknown_category", `Unknown categories: ${unknown.join(", ")}`)
+  }
+  const cleanCategories = normalizeCategories(categories)
+  if (!cleanCategories.length) {
+    throw new AccessError(400, "missing_categories", "At least one activity category is required.")
+  }
+  return cleanCategories
 }
 
 function assertUser(data, userId) {
@@ -443,6 +540,11 @@ function intersectScopes(first = [], second = []) {
   return normalizeScopes(first).filter((scope) => secondSet.has(scope))
 }
 
+function intersectCategories(first = [], second = []) {
+  const secondSet = new Set(second)
+  return normalizeCategories(first).filter((category) => secondSet.has(category))
+}
+
 function publicUser(user) {
   return {
     id: user.id,
@@ -471,7 +573,10 @@ function publicApp(app) {
     name: app.name,
     slug: app.slug || normalizeAppName(app.name),
     description: app.description,
+    developer_url: app.developer_url || "",
+    redirect_urls: app.redirect_urls || [],
     default_scopes: app.default_scopes,
+    default_categories: app.default_categories || DEFAULT_APP_CATEGORIES,
     created_at: app.created_at,
     revoked_at: app.revoked_at
   }
@@ -485,6 +590,7 @@ function publicApiKey(apiKey) {
     name: apiKey.name,
     key_prefix: apiKey.key_prefix,
     scopes: apiKey.scopes,
+    categories: apiKey.categories || DEFAULT_APP_CATEGORIES,
     created_at: apiKey.created_at,
     last_used_at: apiKey.last_used_at,
     revoked_at: apiKey.revoked_at

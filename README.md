@@ -37,7 +37,8 @@ app asks for permission
 -> app receives only the permitted output
 ```
 
-API keys are capability keys, not memory dump keys.
+API keys are capability keys, not memory dump keys. A key identifies the app.
+A user-specific `connection_id` identifies the user who approved that app.
 
 ## Default Policy
 
@@ -57,6 +58,22 @@ Scopes are explicit:
 - `memory:read_graph`
 
 Raw graph reads are intentionally separate from capture/schema write scopes.
+
+Activity categories are explicit too:
+
+- `web:news`
+- `web:research`
+- `web:commerce`
+- `web:social`
+- `media:video`
+- `media:audio`
+- `ai:assistant`
+- `dev:code`
+- `work:docs`
+
+This lets an app ask Memact to operate only inside the relevant part of a
+user's activity. For example, a news-bias tool can request only `web:news`,
+while an AI-conversation tool can request only `ai:assistant`.
 
 ## Run Locally
 
@@ -93,6 +110,12 @@ If the project already has the first migration, also apply the latest repair mig
 
 ```text
 supabase/migrations/20260507190000_qualify_access_crypto.sql
+```
+
+Then apply the Connect/category migration:
+
+```text
+supabase/migrations/20260507203000_connect_categories_guardrails.sql
 ```
 
 Then point Website at your Supabase project only.
@@ -149,6 +172,8 @@ Primary production surface:
 - `memact_create_app(...)`
 - `memact_delete_app(...)`
 - `memact_grant_consent(...)`
+- `memact_get_connect_app(...)`
+- `memact_connect_app(...)`
 - `memact_create_api_key(...)`
 - `memact_revoke_api_key(...)`
 - `memact_verify_api_key(...)`
@@ -161,10 +186,48 @@ Legacy local HTTP surface still exists for local fallback:
 - `DELETE /v1/apps/<app_id>`
 - `POST /v1/api-keys`
 - `POST /v1/consents`
+- `GET /v1/connect/app`
+- `POST /v1/connect/approve`
 - `POST /v1/access/verify`
 
 App names stay unique per user after normalizing spaces and punctuation.
 Deleting an app revokes its active API keys and saved permissions.
+
+## Connect App Flow
+
+Third-party apps should not silently attach themselves to a user. They should
+send the user to Memact with:
+
+```text
+/connect?app_id=<app-id>&scopes=memory:read_summary&categories=web:news&redirect_uri=https://app.example/callback
+```
+
+Memact shows:
+
+- app name
+- developer website, if provided
+- exact requested scopes in normal language
+- exact activity categories
+- a short safety boundary
+
+If the user approves, Access creates or updates a consent row and returns a
+`connection_id` through the redirect URL. Future API checks should include both
+the API key and that `connection_id`.
+
+If the user cancels, no consent is created and API verification fails.
+
+## Safety Guardrails
+
+Access publishes policy guardrails that apps are expected to follow:
+
+- no selling raw personal memory
+- no surveillance without user permission
+- no manipulative targeting
+- no political persuasion targeting
+- no credit, employment, insurance, or housing decisions
+- no sensitive trait inference unless the user explicitly asks for it
+
+Capture still handles sensitive source exclusion before graph formation.
 
 ## Security Notes
 

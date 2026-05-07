@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url"
 import { loadLocalEnv } from "./env.mjs"
 import { JsonFileStore } from "./store.mjs"
 import { AccessError, AccessService } from "./service.mjs"
-import { SENSITIVE_CAPTURE_RULES } from "./policy.mjs"
+import { CATEGORY_DEFINITIONS, KNOWLEDGE_GRAPH_CONTRACT, SAFETY_RULES, SENSITIVE_CAPTURE_RULES } from "./policy.mjs"
 
 loadLocalEnv()
 
@@ -58,7 +58,10 @@ async function route(service, request, url, body) {
   if (request.method === "GET" && path === "/v1/policy") {
     return {
       ...(await service.policy()),
-      sensitive_capture_rules: SENSITIVE_CAPTURE_RULES
+      sensitive_capture_rules: SENSITIVE_CAPTURE_RULES,
+      activity_categories: CATEGORY_DEFINITIONS,
+      safety_rules: SAFETY_RULES,
+      knowledge_graph_contract: KNOWLEDGE_GRAPH_CONTRACT
     }
   }
   if (request.method === "POST" && path === "/v1/auth/signup") {
@@ -69,7 +72,12 @@ async function route(service, request, url, body) {
   }
 
   if (request.method === "POST" && path === "/v1/access/verify") {
-    return service.verifyApiAccess(request.headers["x-memact-api-key"], body?.required_scopes || [])
+    return service.verifyApiAccess(
+      request.headers["x-memact-api-key"],
+      body?.required_scopes || [],
+      body?.activity_categories || [],
+      body?.connection_id || ""
+    )
   }
 
   const auth = await service.authenticateSession(request.headers.authorization)
@@ -100,11 +108,28 @@ async function route(service, request, url, body) {
   if (request.method === "POST" && path === "/v1/consents") {
     return service.grantConsent(auth.user.id, body)
   }
+  if (request.method === "GET" && path === "/v1/connect/app") {
+    return service.getConnectApp(auth.user.id, {
+      app_id: url.searchParams.get("app_id"),
+      scopes: parseList(url.searchParams.get("scopes")),
+      categories: parseList(url.searchParams.get("categories"))
+    })
+  }
+  if (request.method === "POST" && path === "/v1/connect/approve") {
+    return service.connectApp(auth.user.id, body)
+  }
   if (request.method === "POST" && path === "/v1/consents/revoke") {
     return service.revokeConsent(auth.user.id, body?.consent_id)
   }
 
   throw new AccessError(404, "not_found", "Endpoint not found.")
+}
+
+function parseList(value) {
+  return String(value || "")
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean)
 }
 
 async function readJson(request) {

@@ -77,6 +77,68 @@ test("API access requires both key scopes and user consent", async () => {
   )
 })
 
+test("API access is limited by activity categories", async () => {
+  const service = new AccessService(new MemoryStore())
+  const signup = await service.signup({ email: "category@example.com", password: "long password" })
+  const app = await service.registerApp(signup.user.id, {
+    name: "News Tool",
+    categories: ["web:news"]
+  })
+  const key = await service.createApiKey(signup.user.id, {
+    app_id: app.app.id,
+    scopes: ["capture:webpage", "schema:write"],
+    categories: ["web:news"]
+  })
+  await service.grantConsent(signup.user.id, {
+    app_id: app.app.id,
+    scopes: ["capture:webpage", "schema:write"],
+    categories: ["web:news"]
+  })
+
+  const allowed = await service.verifyApiAccess(key.key, ["capture:webpage"], ["web:news"])
+  assert.equal(allowed.allowed, true)
+  assert.deepEqual(allowed.categories, ["web:news"])
+
+  await assert.rejects(
+    () => service.verifyApiAccess(key.key, ["capture:webpage"], ["ai:assistant"]),
+    /activity categories/
+  )
+})
+
+test("connect flow grants a user-specific connection id", async () => {
+  const service = new AccessService(new MemoryStore())
+  const developer = await service.signup({ email: "developer@example.com", password: "long password" })
+  const user = await service.signup({ email: "user@example.com", password: "long password" })
+  const app = await service.registerApp(developer.user.id, {
+    name: "StudyFlow",
+    categories: ["web:research", "ai:assistant"]
+  })
+  const key = await service.createApiKey(developer.user.id, {
+    app_id: app.app.id,
+    scopes: ["memory:read_summary"],
+    categories: ["web:research"]
+  })
+
+  const preview = await service.getConnectApp(user.user.id, {
+    app_id: app.app.id,
+    scopes: ["memory:read_summary"],
+    categories: ["web:research"]
+  })
+  assert.equal(preview.app.name, "StudyFlow")
+  assert.deepEqual(preview.requested_categories, ["web:research"])
+
+  const connected = await service.connectApp(user.user.id, {
+    app_id: app.app.id,
+    scopes: ["memory:read_summary"],
+    categories: ["web:research"]
+  })
+  const allowed = await service.verifyApiAccess(key.key, ["memory:read_summary"], ["web:research"], connected.consent.id)
+
+  assert.equal(allowed.allowed, true)
+  assert.equal(allowed.user_id, user.user.id)
+  assert.equal(allowed.connection_id, connected.consent.id)
+})
+
 test("unknown scopes are rejected instead of silently accepted", async () => {
   const service = new AccessService(new MemoryStore())
   const signup = await service.signup({ email: "scope@example.com", password: "long password" })

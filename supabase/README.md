@@ -15,6 +15,12 @@ For an existing Supabase project that already has Access installed, also run:
 supabase/migrations/20260507190000_qualify_access_crypto.sql
 ```
 
+Then run the Connect/category migration:
+
+```text
+supabase/migrations/20260507203000_connect_categories_guardrails.sql
+```
+
 That migration creates:
 
 - `memact_apps`
@@ -35,9 +41,20 @@ After the migration, the Website portal can call these RPC functions directly:
 - `memact_create_app`
 - `memact_delete_app`
 - `memact_grant_consent`
+- `memact_get_connect_app`
+- `memact_connect_app`
 - `memact_create_api_key`
 - `memact_revoke_api_key`
 - `memact_verify_api_key`
+
+`memact_verify_api_key` now checks:
+
+- API key hash
+- app status
+- user consent
+- requested scopes
+- requested activity categories
+- optional `connection_id` from the Connect App flow
 
 ## Import Existing Local Access Data
 
@@ -65,3 +82,5 @@ users by email.
 - gives durable storage instead of a local JSON file
 - keeps API keys hashed
 - keeps consent scoped per app
+- lets apps request only the activity categories they need
+- supports a Discord-style user approval page before an app connects
