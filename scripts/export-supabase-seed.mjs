@@ -24,7 +24,7 @@ insert into public.memact_apps (
   id, owner_user_id, name, slug, description, redirect_urls, default_scopes, created_at, updated_at, revoked_at
 )
 values (
-  '${escapeSql(app.id)}'::uuid,
+  '${escapeSql(toUuid(app.id))}'::uuid,
   (select id from auth.users where lower(email) = lower('${escapeSql(owner.email)}') limit 1),
   '${escapeSql(app.name)}',
   '${escapeSql(app.slug || normalizeAppName(app.name))}',
@@ -54,8 +54,8 @@ insert into public.memact_api_keys (
   id, app_id, owner_user_id, name, key_hash, key_prefix, scopes, created_at, last_used_at, revoked_at, first_used_notified_at
 )
 values (
-  '${escapeSql(key.id)}'::uuid,
-  '${escapeSql(key.app_id)}'::uuid,
+  '${escapeSql(toUuid(key.id))}'::uuid,
+  '${escapeSql(toUuid(key.app_id))}'::uuid,
   (select id from auth.users where lower(email) = lower('${escapeSql(owner.email)}') limit 1),
   '${escapeSql(key.name)}',
   '${escapeSql(key.key_hash)}',
@@ -85,9 +85,9 @@ insert into public.memact_consents (
   id, user_id, app_id, scopes, created_at, updated_at, revoked_at
 )
 values (
-  '${escapeSql(consent.id)}'::uuid,
+  '${escapeSql(toUuid(consent.id))}'::uuid,
   (select id from auth.users where lower(email) = lower('${escapeSql(owner.email)}') limit 1),
-  '${escapeSql(consent.app_id)}'::uuid,
+  '${escapeSql(toUuid(consent.app_id))}'::uuid,
   ${toTextArray(consent.scopes || [])},
   '${escapeSql(consent.created_at)}'::timestamptz,
   '${escapeSql(consent.updated_at || consent.created_at)}'::timestamptz,
@@ -107,7 +107,7 @@ insert into public.memact_audit_log (
   id, user_id, action, details, created_at
 )
 values (
-  '${escapeSql(entry.id)}'::uuid,
+  '${escapeSql(toUuid(entry.id))}'::uuid,
   ${owner?.email ? `(select id from auth.users where lower(email) = lower('${escapeSql(owner.email)}') limit 1)` : "null"},
   '${escapeSql(entry.action)}',
   '${escapeSql(JSON.stringify(entry.details || {}))}'::jsonb,
@@ -141,4 +141,13 @@ function toTimestamp(value) {
 function toTextArray(values) {
   const list = Array.isArray(values) ? values : []
   return `array[${list.map((value) => `'${escapeSql(value)}'`).join(", ")}]::text[]`
+}
+
+function toUuid(value) {
+  const raw = String(value || "")
+  const match = raw.match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i)
+  if (!match) {
+    throw new Error(`Could not extract uuid from "${raw}"`)
+  }
+  return match[0]
 }
