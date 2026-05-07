@@ -463,7 +463,16 @@ declare
   current_user_id uuid := public.memact_require_authenticated_user();
   target_app public.memact_apps%rowtype;
   created_key public.memact_api_keys%rowtype;
-  raw_key text := 'mka_' || encode(gen_random_bytes(24), 'hex');
+  raw_key text := 'mka_' || substring(
+    encode(
+      digest(
+        gen_random_uuid()::text || ':' || gen_random_uuid()::text || ':' || clock_timestamp()::text || ':' || random()::text,
+        'sha256'
+      ),
+      'hex'
+    )
+    from 1 for 48
+  );
 begin
   select *
   into target_app
