@@ -20,6 +20,13 @@ select
   null
 from auth.users as auth_user
 where lower(auth_user.email) = lower('thrifthunt3@gmail.com')
+  and not exists (
+    select 1
+    from public.memact_apps existing_app
+    where existing_app.owner_user_id = auth_user.id
+      and existing_app.slug = 'my-memact-app'
+      and existing_app.revoked_at is null
+  )
 limit 1
 on conflict (id) do update
 set
@@ -47,6 +54,13 @@ select
   null
 from auth.users as auth_user
 where lower(auth_user.email) = lower('thrifthunt3@gmail.com')
+  and not exists (
+    select 1
+    from public.memact_apps existing_app
+    where existing_app.owner_user_id = auth_user.id
+      and existing_app.slug = 'my-memact-app-2'
+      and existing_app.revoked_at is null
+  )
 limit 1
 on conflict (id) do update
 set
@@ -74,33 +88,13 @@ select
   null
 from auth.users as auth_user
 where lower(auth_user.email) = lower('thrifthunt3@gmail.com')
-limit 1
-on conflict (id) do update
-set
-  name = excluded.name,
-  slug = excluded.slug,
-  description = excluded.description,
-  redirect_urls = excluded.redirect_urls,
-  default_scopes = excluded.default_scopes,
-  updated_at = excluded.updated_at,
-  revoked_at = excluded.revoked_at;
-
-insert into public.memact_apps (
-  id, owner_user_id, name, slug, description, redirect_urls, default_scopes, created_at, updated_at, revoked_at
-)
-select
-  'fc130b29-7362-45c8-adf7-3814582bd26e'::uuid,
-  auth_user.id,
-  'My Memact App',
-  'my-memact-app',
-  'Uses Memact to form useful schema memory.',
-  '[]'::jsonb,
-  array['capture:webpage', 'schema:write', 'graph:write', 'memory:write', 'memory:read_summary']::text[],
-  '2026-05-06T10:23:03.321Z'::timestamptz,
-  '2026-05-06T10:23:03.321Z'::timestamptz,
-  null
-from auth.users as auth_user
-where lower(auth_user.email) = lower('keepsloading@gmail.com')
+  and not exists (
+    select 1
+    from public.memact_apps existing_app
+    where existing_app.owner_user_id = auth_user.id
+      and existing_app.slug = 'my-memact-app-3'
+      and existing_app.revoked_at is null
+  )
 limit 1
 on conflict (id) do update
 set
@@ -128,6 +122,13 @@ select
   null
 from auth.users as auth_user
 where lower(auth_user.email) = lower('keepsloading@gmail.com')
+  and not exists (
+    select 1
+    from public.memact_apps existing_app
+    where existing_app.owner_user_id = auth_user.id
+      and existing_app.slug = 'my-memact-app'
+      and existing_app.revoked_at is null
+  )
 limit 1
 on conflict (id) do update
 set
@@ -144,7 +145,7 @@ insert into public.memact_api_keys (
 )
 select
   '103298fb-ace8-495f-bb6f-476dfca59184'::uuid,
-  '5cf04c46-0bd2-4678-ad24-c66016ee8b2f'::uuid,
+  app.id,
   auth_user.id,
   'Default app key',
   '376ab824c1340e8b3b96b8562c0d5161f98c09e80615c255a022bf7b216e03b3',
@@ -155,6 +156,10 @@ select
   '2026-05-06T07:30:36.306Z'::timestamptz,
   null
 from auth.users as auth_user
+join public.memact_apps as app
+  on app.owner_user_id = auth_user.id
+ and app.slug = 'my-memact-app'
+ and app.revoked_at is null
 where lower(auth_user.email) = lower('thrifthunt3@gmail.com')
 limit 1
 on conflict (id) do update
@@ -172,7 +177,7 @@ insert into public.memact_api_keys (
 )
 select
   'ffe04028-1a50-4e2b-b7ec-3e3f3ecbb31b'::uuid,
-  'fc130b29-7362-45c8-adf7-3814582bd26e'::uuid,
+  app.id,
   auth_user.id,
   'Default app key',
   'c355e4dbfa37e073d7b8fbadcc8ddb0629f141d2bd2be5d307b7ffa7a40b5bfc',
@@ -183,6 +188,10 @@ select
   null,
   null
 from auth.users as auth_user
+join public.memact_apps as app
+  on app.owner_user_id = auth_user.id
+ and app.slug = 'my-memact-app'
+ and app.revoked_at is null
 where lower(auth_user.email) = lower('keepsloading@gmail.com')
 limit 1
 on conflict (id) do update
@@ -201,12 +210,16 @@ insert into public.memact_consents (
 select
   '7d7c79c9-11dd-4fe1-b4cc-ca7b5efb60bf'::uuid,
   auth_user.id,
-  '5cf04c46-0bd2-4678-ad24-c66016ee8b2f'::uuid,
+  app.id,
   array['capture:webpage', 'schema:write', 'graph:write', 'memory:write', 'memory:read_summary']::text[],
   '2026-05-06T07:30:24.781Z'::timestamptz,
   '2026-05-06T07:30:24.781Z'::timestamptz,
   null
 from auth.users as auth_user
+join public.memact_apps as app
+  on app.owner_user_id = auth_user.id
+ and app.slug = 'my-memact-app'
+ and app.revoked_at is null
 where lower(auth_user.email) = lower('thrifthunt3@gmail.com')
 limit 1
 on conflict (id) do update
@@ -221,12 +234,16 @@ insert into public.memact_consents (
 select
   '46d520d3-439f-4e60-a031-1d089d85f85c'::uuid,
   auth_user.id,
-  '7e2c3735-3e44-4e25-be86-23d06d15884d'::uuid,
+  app.id,
   array['capture:webpage', 'schema:write', 'graph:write', 'memory:write', 'memory:read_summary']::text[],
   '2026-05-06T08:57:54.880Z'::timestamptz,
   '2026-05-06T08:57:54.880Z'::timestamptz,
   null
 from auth.users as auth_user
+join public.memact_apps as app
+  on app.owner_user_id = auth_user.id
+ and app.slug = 'my-memact-app-3'
+ and app.revoked_at is null
 where lower(auth_user.email) = lower('thrifthunt3@gmail.com')
 limit 1
 on conflict (id) do update
@@ -241,12 +258,16 @@ insert into public.memact_consents (
 select
   '466fc741-ca67-41a0-9958-c1d1185c38d4'::uuid,
   auth_user.id,
-  'fc130b29-7362-45c8-adf7-3814582bd26e'::uuid,
+  app.id,
   array['capture:webpage', 'schema:write', 'graph:write', 'memory:write', 'memory:read_summary', 'capture:device', 'memory:read_graph', 'memory:read_evidence', 'capture:media']::text[],
   '2026-05-06T10:26:31.987Z'::timestamptz,
   '2026-05-06T10:26:31.987Z'::timestamptz,
   null
 from auth.users as auth_user
+join public.memact_apps as app
+  on app.owner_user_id = auth_user.id
+ and app.slug = 'my-memact-app'
+ and app.revoked_at is null
 where lower(auth_user.email) = lower('keepsloading@gmail.com')
 limit 1
 on conflict (id) do update
