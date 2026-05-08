@@ -1,6 +1,6 @@
 -- Memact Access full Supabase install/repair SQL
 -- Run this whole file in the Supabase SQL editor for a new project, or to repair/update an existing project.
--- It is the ordered combination of all migrations in supabase/migrations as of 2026-05-07.
+-- It is the ordered combination of all migrations in supabase/migrations as of 2026-05-08.
 
 -- === 20260507120000_memact_access.sql ===
 
@@ -471,8 +471,8 @@ declare
   created_key public.memact_api_keys%rowtype;
   raw_key text := 'mka_' || substring(
     encode(
-      digest(
-        gen_random_uuid()::text || ':' || gen_random_uuid()::text || ':' || clock_timestamp()::text || ':' || random()::text,
+      extensions.digest(
+        extensions.gen_random_uuid()::text || ':' || extensions.gen_random_uuid()::text || ':' || clock_timestamp()::text || ':' || random()::text,
         'sha256'
       ),
       'hex'
@@ -503,7 +503,7 @@ begin
     target_app.id,
     current_user_id,
     left(trim(coalesce(key_name_input, 'Default app key')), 80),
-    encode(digest(raw_key, 'sha256'), 'hex'),
+    encode(extensions.digest(raw_key, 'sha256'), 'hex'),
     left(raw_key, 12),
     coalesce(scopes_input, array[]::text[])
   )
@@ -586,7 +586,7 @@ begin
   select *
   into target_key
   from public.memact_api_keys key
-  where key.key_hash = encode(digest(coalesce(api_key_input, ''), 'sha256'), 'hex')
+  where key.key_hash = encode(extensions.digest(coalesce(api_key_input, ''), 'sha256'), 'hex')
     and key.revoked_at is null;
 
   if not found then
@@ -709,8 +709,8 @@ declare
   created_key public.memact_api_keys%rowtype;
   raw_key text := 'mka_' || substring(
     encode(
-      digest(
-        gen_random_uuid()::text || ':' || gen_random_uuid()::text || ':' || clock_timestamp()::text || ':' || random()::text,
+      extensions.digest(
+        extensions.gen_random_uuid()::text || ':' || extensions.gen_random_uuid()::text || ':' || clock_timestamp()::text || ':' || random()::text,
         'sha256'
       ),
       'hex'
@@ -741,7 +741,7 @@ begin
     target_app.id,
     current_user_id,
     left(trim(coalesce(key_name_input, 'Default app key')), 80),
-    encode(digest(raw_key, 'sha256'), 'hex'),
+    encode(extensions.digest(raw_key, 'sha256'), 'hex'),
     left(raw_key, 12),
     coalesce(scopes_input, array[]::text[])
   )
@@ -773,7 +773,14 @@ $$;
 -- === 20260507190000_qualify_access_crypto.sql ===
 
 create schema if not exists extensions;
-create extension if not exists pgcrypto with schema extensions;
+do $$
+begin
+  if exists (select 1 from pg_extension where extname = 'pgcrypto') then
+    alter extension pgcrypto set schema extensions;
+  else
+    create extension pgcrypto with schema extensions;
+  end if;
+end $$;
 
 create or replace function public.memact_create_api_key(app_id_input uuid, key_name_input text default 'Default app key', scopes_input text[] default array[]::text[])
 returns jsonb
@@ -785,7 +792,16 @@ declare
   current_user_id uuid := public.memact_require_authenticated_user();
   target_app public.memact_apps%rowtype;
   created_key public.memact_api_keys%rowtype;
-  raw_key text := 'mka_' || encode(gen_random_bytes(24), 'hex');
+  raw_key text := 'mka_' || substring(
+    encode(
+      extensions.digest(
+        extensions.gen_random_uuid()::text || ':' || extensions.gen_random_uuid()::text || ':' || clock_timestamp()::text || ':' || random()::text,
+        'sha256'
+      ),
+      'hex'
+    )
+    from 1 for 48
+  );
 begin
   select *
   into target_app
@@ -810,7 +826,7 @@ begin
     target_app.id,
     current_user_id,
     left(trim(coalesce(key_name_input, 'Default app key')), 80),
-    encode(digest(raw_key, 'sha256'), 'hex'),
+    encode(extensions.digest(raw_key, 'sha256'), 'hex'),
     left(raw_key, 12),
     coalesce(scopes_input, array[]::text[])
   )
@@ -855,7 +871,7 @@ begin
   select *
   into target_key
   from public.memact_api_keys key
-  where key.key_hash = encode(digest(coalesce(api_key_input, ''), 'sha256'), 'hex')
+  where key.key_hash = encode(extensions.digest(coalesce(api_key_input, ''), 'sha256'), 'hex')
     and key.revoked_at is null;
 
   if not found then
@@ -948,7 +964,14 @@ grant execute on function public.memact_verify_api_key(text, text[]) to anon, au
 -- === 20260507203000_connect_categories_guardrails.sql ===
 
 create schema if not exists extensions;
-create extension if not exists pgcrypto with schema extensions;
+do $$
+begin
+  if exists (select 1 from pg_extension where extname = 'pgcrypto') then
+    alter extension pgcrypto set schema extensions;
+  else
+    create extension pgcrypto with schema extensions;
+  end if;
+end $$;
 
 alter table public.memact_apps
   add column if not exists developer_url text not null default '',
@@ -1163,6 +1186,7 @@ drop function if exists public.memact_create_app(text, text, jsonb, text, text[]
 drop function if exists public.memact_create_app(text, text, text[]);
 drop function if exists public.memact_create_app(text, text, text[], text);
 drop function if exists public.memact_create_app(text, text, text[], text, text[]);
+drop function if exists public.memact_create_app(text[], text, text, text, text[]);
 create or replace function public.memact_create_app(app_name text, app_description text default '', app_redirect_urls jsonb default '[]'::jsonb, app_developer_url text default '', app_categories text[] default array['web:news','web:research','media:video','ai:assistant','dev:code']::text[])
 returns jsonb
 language plpgsql
@@ -1297,7 +1321,16 @@ declare
   target_app public.memact_apps%rowtype;
   created_key public.memact_api_keys%rowtype;
   clean_scopes text[] := public.memact_clean_allowed_values(scopes_input, public.memact_known_scopes());
-  raw_key text := 'mka_' || encode(gen_random_bytes(24), 'hex');
+  raw_key text := 'mka_' || substring(
+    encode(
+      extensions.digest(
+        extensions.gen_random_uuid()::text || ':' || extensions.gen_random_uuid()::text || ':' || clock_timestamp()::text || ':' || random()::text,
+        'sha256'
+      ),
+      'hex'
+    )
+    from 1 for 48
+  );
 begin
   select * into target_app
   from public.memact_apps app
@@ -1312,7 +1345,7 @@ begin
     target_app.id,
     current_user_id,
     left(trim(coalesce(key_name_input, 'Default app key')), 80),
-    encode(digest(raw_key::text, 'sha256'::text), 'hex'),
+    encode(extensions.digest(raw_key::text, 'sha256'::text), 'hex'),
     left(raw_key, 12),
     clean_scopes
   )
@@ -1425,7 +1458,7 @@ declare
 begin
   select * into target_key
   from public.memact_api_keys key
-  where key.key_hash = encode(digest(coalesce(api_key_input, '')::text, 'sha256'::text), 'hex')
+  where key.key_hash = encode(extensions.digest(coalesce(api_key_input, '')::text, 'sha256'::text), 'hex')
     and key.revoked_at is null;
   if not found then return jsonb_build_object('allowed', false, 'error', jsonb_build_object('code', 'invalid_api_key', 'message', 'API key is invalid or revoked.')); end if;
 

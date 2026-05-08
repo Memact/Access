@@ -2,18 +2,19 @@ import test from "node:test"
 import assert from "node:assert/strict"
 import fs from "node:fs/promises"
 
-const latestMigrationPath = new URL("../supabase/migrations/20260507203000_connect_categories_guardrails.sql", import.meta.url)
+const latestMigrationPath = new URL("../supabase/migrations/20260508103000_stabilize_access_rpcs.sql", import.meta.url)
 const fullInstallPath = new URL("../supabase/memact_access_full_install.sql", import.meta.url)
 
-test("latest Supabase SQL avoids brittle schema-qualified pgcrypto calls", async () => {
+test("latest Supabase SQL qualifies pgcrypto calls through the extensions schema", async () => {
   const migration = await fs.readFile(latestMigrationPath, "utf8")
   const fullInstall = await fs.readFile(fullInstallPath, "utf8")
 
   for (const sql of [migration, fullInstall]) {
-    assert.equal(sql.includes("extensions.digest("), false)
+    assert.match(sql, /extensions\.digest\(/)
+    assert.match(sql, /extensions\.gen_random_uuid\(\)/)
+    assert.match(sql, /alter extension pgcrypto set schema extensions/)
     assert.equal(sql.includes("extensions.gen_random_bytes("), false)
-    assert.match(sql, /digest\([^)]*'sha256'::text\)/)
-    assert.match(sql, /gen_random_bytes\(24\)/)
+    assert.doesNotMatch(sql, /gen_random_bytes\(24\)/)
   }
 })
 
@@ -44,5 +45,6 @@ test("Supabase SQL drops stale overloaded create app functions", async () => {
     assert.match(sql, /drop function if exists public\.memact_create_app\(text, text, text\[\]\);/)
     assert.match(sql, /drop function if exists public\.memact_create_app\(text, text, text\[\], text\);/)
     assert.match(sql, /drop function if exists public\.memact_create_app\(text, text, text\[\], text, text\[\]\);/)
+    assert.match(sql, /drop function if exists public\.memact_create_app\(text\[\], text, text, text, text\[\]\);/)
   }
 })
