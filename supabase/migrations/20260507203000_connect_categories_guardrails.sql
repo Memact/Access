@@ -211,6 +211,9 @@ $$;
 
 drop function if exists public.memact_create_app(text, text, jsonb);
 drop function if exists public.memact_create_app(text, text, jsonb, text, text[]);
+drop function if exists public.memact_create_app(text, text, text[]);
+drop function if exists public.memact_create_app(text, text, text[], text);
+drop function if exists public.memact_create_app(text, text, text[], text, text[]);
 create or replace function public.memact_create_app(app_name text, app_description text default '', app_redirect_urls jsonb default '[]'::jsonb, app_developer_url text default '', app_categories text[] default array['web:news','web:research','media:video','ai:assistant','dev:code']::text[])
 returns jsonb
 language plpgsql

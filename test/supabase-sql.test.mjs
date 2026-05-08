@@ -35,3 +35,14 @@ test("activity categories are not stored on API keys", async () => {
     assert.doesNotMatch(sql, /target_key\.categories|created_key\.categories|key\.categories/)
   }
 })
+
+test("Supabase SQL drops stale overloaded create app functions", async () => {
+  const migration = await fs.readFile(latestMigrationPath, "utf8")
+  const fullInstall = await fs.readFile(fullInstallPath, "utf8")
+
+  for (const sql of [migration, fullInstall]) {
+    assert.match(sql, /drop function if exists public\.memact_create_app\(text, text, text\[\]\);/)
+    assert.match(sql, /drop function if exists public\.memact_create_app\(text, text, text\[\], text\);/)
+    assert.match(sql, /drop function if exists public\.memact_create_app\(text, text, text\[\], text, text\[\]\);/)
+  }
+})
