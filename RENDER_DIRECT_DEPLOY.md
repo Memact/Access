@@ -32,6 +32,7 @@ NODE_ENV=production
 MEMACT_ACCESS_HOST=0.0.0.0
 MEMACT_ACCESS_STORE=.data/access-store.json
 MEMACT_ACCESS_ALLOWED_ORIGINS=https://memact.com,https://www.memact.com,https://memact-website.onrender.com
+MEMACT_ACCESS_BACKEND=supabase
 NEXT_PUBLIC_SUPABASE_URL=<your Supabase project URL>
 NEXT_PUBLIC_SUPABASE_ANON_KEY=<your Supabase anon key>
 ```
@@ -52,6 +53,17 @@ Expected:
 {"ok":true,"service":"memact-access","version":"v0.0"}
 ```
 
+Then verify the developer API shape from a server or terminal:
+
+```powershell
+curl -X POST https://your-access-host/v1/access/verify `
+  -H "Authorization: Bearer mka_your_private_app_key" `
+  -H "Content-Type: application/json" `
+  -d "{\"connection_id\":\"connection_id_from_connect_redirect\",\"required_scopes\":[\"memory:read_summary\"],\"activity_categories\":[\"web:research\"]}"
+```
+
 ## Note
 
-This demo service currently stores app records and API key hashes in a local JSON file. For production users, move this storage to Supabase/Postgres before relying on it as permanent infrastructure.
+With `MEMACT_ACCESS_BACKEND=supabase`, verification uses the same Supabase-backed
+Access records as the Website. Without that setting, the service falls back to
+the old local JSON store for development only.

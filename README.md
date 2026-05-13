@@ -187,6 +187,41 @@ Legacy local HTTP surface still exists for local fallback:
 - `POST /v1/connect/approve`
 - `POST /v1/access/verify`
 
+## Developer Verification API
+
+Apps should verify Memact access through the stable HTTP contract, not by
+calling Supabase RPCs directly.
+
+```http
+POST /v1/access/verify
+Authorization: Bearer mka_your_private_app_key
+Content-Type: application/json
+```
+
+```json
+{
+  "connection_id": "connection_id_from_connect_redirect",
+  "required_scopes": ["memory:read_summary"],
+  "activity_categories": ["web:research"]
+}
+```
+
+The response is the allowed app, user connection, approved scopes, and approved
+categories. If the key, connection, scope, or category is missing, the endpoint
+returns an error and the app must not use Memact output.
+
+For production, set:
+
+```text
+MEMACT_ACCESS_BACKEND=supabase
+NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your-public-anon-key
+```
+
+The Supabase anon key is Memact infrastructure for this service. Third-party
+app developers should not configure it in their apps; they only keep their raw
+`mka_...` app key server-side.
+
 App names stay unique per user after normalizing spaces and punctuation.
 Deleting an app revokes its active API keys and saved permissions.
 

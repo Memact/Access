@@ -72,8 +72,11 @@ async function route(service, request, url, body) {
   }
 
   if (request.method === "POST" && path === "/v1/access/verify") {
+    if (usesSupabaseVerification()) {
+      return verifySupabaseApiAccess(request, body)
+    }
     return service.verifyApiAccess(
-      request.headers["x-memact-api-key"],
+      readMemactApiKey(request),
       body?.required_scopes || [],
       body?.activity_categories || [],
       body?.connection_id || ""
@@ -130,6 +133,68 @@ function parseList(value) {
     .split(",")
     .map((item) => item.trim())
     .filter(Boolean)
+}
+
+function usesSupabaseVerification() {
+  return String(process.env.MEMACT_ACCESS_BACKEND || "").toLowerCase() === "supabase"
+}
+
+function readMemactApiKey(request) {
+  const headerKey = String(request.headers["x-memact-api-key"] || "").trim()
+  if (headerKey) return headerKey
+
+  const authorization = String(request.headers.authorization || "").trim()
+  const bearerMatch = authorization.match(/^Bearer\s+(.+)$/i)
+  return bearerMatch ? bearerMatch[1].trim() : ""
+}
+
+async function verifySupabaseApiAccess(request, body = {}) {
+  const supabaseUrl = String(process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || "").replace(/\/+$/, "")
+  const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ""
+  const apiKey = readMemactApiKey(request)
+
+  if (!supabaseUrl || !supabaseAnonKey) {
+    throw new AccessError(500, "access_backend_missing", "Access verification backend is not configured.")
+  }
+  if (!apiKey) {
+    throw new AccessError(401, "missing_api_key", "Memact API key is required.")
+  }
+
+  const response = await fetch(`${supabaseUrl}/rest/v1/rpc/memact_verify_api_key`, {
+    method: "POST",
+    headers: {
+      apikey: supabaseAnonKey,
+      Authorization: `Bearer ${supabaseAnonKey}`,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      api_key_input: apiKey,
+      required_scopes_input: body?.required_scopes || [],
+      activity_categories_input: body?.activity_categories || [],
+      consent_id_input: body?.connection_id || null
+    })
+  })
+
+  const text = await response.text()
+  const payload = parseJsonResponse(text)
+  if (!response.ok) {
+    const message = payload?.message || payload?.error?.message || "Memact could not verify this API key."
+    throw new AccessError(response.status, payload?.code || payload?.error?.code || "verification_failed", message)
+  }
+  if (!payload?.allowed) {
+    throw new AccessError(403, payload?.error?.code || "access_denied", payload?.error?.message || "Memact access denied.")
+  }
+
+  return payload
+}
+
+function parseJsonResponse(text) {
+  if (!text) return {}
+  try {
+    return JSON.parse(text)
+  } catch {
+    return { message: text }
+  }
 }
 
 async function readJson(request) {
