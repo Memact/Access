@@ -1,7 +1,7 @@
-# Memact Access on Supabase
+# Memact Permission Layer on Supabase
 
-Access now deploys best as a Supabase-backed permission layer instead of a paid
-Node host.
+Memact's permission layer now deploys best on Supabase instead of a paid Node
+host.
 
 Use the full ordered SQL bundle in the Supabase SQL editor for a new install or an existing project repair/update:
 
@@ -55,7 +55,7 @@ After the migration, the Website portal can call these RPC functions directly:
 - requested activity categories
 - optional `connection_id` from the Connect App flow
 
-## Import Existing Local Access Data
+## Import Existing Local Permission Data
 
 If you already created apps or API keys with the old local JSON store, generate
 an import SQL file:
@@ -71,12 +71,12 @@ This writes:
 ```
 
 Run that SQL after the main migration. The generated file can include local
-account emails, so it is kept under `.data/` and must not be committed. It maps old Access rows to Supabase
+account emails, so it is kept under `.data/` and must not be committed. It maps old permission rows to Supabase
 users by email.
 
 ## Why This Path
 
-- avoids Render billing for the Access backend
+- avoids Render billing for a separate permission backend
 - keeps auth and access data in one place
 - gives durable storage instead of a local JSON file
 - keeps API keys hashed

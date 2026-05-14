@@ -1,4 +1,4 @@
--- Memact Access full Supabase install/repair SQL
+-- Memact permission-layer full Supabase install/repair SQL
 -- Run this whole file in the Supabase SQL editor for a new project, or to repair/update an existing project.
 -- It is the ordered combination of all migrations in supabase/migrations as of 2026-05-08.
 
@@ -155,50 +155,50 @@ as $$
     ]::text[]),
     'scopes', jsonb_build_object(
       'capture:webpage', jsonb_build_object(
-        'label', 'Capture webpages',
-        'description', 'Allow Memact to capture useful webpage content for this app.',
+        'label', 'Use webpage evidence',
+        'description', 'Allow Memact to use approved webpage evidence to understand activity for this app.',
         'grantsGraphRead', false
       ),
       'capture:media', jsonb_build_object(
-        'label', 'Capture media context',
-        'description', 'Allow Memact to capture captions, transcripts, and media context when available.',
+        'label', 'Use media evidence',
+        'description', 'Allow Memact to use approved captions, transcripts, and media context when available.',
         'grantsGraphRead', false
       ),
       'capture:device', jsonb_build_object(
-        'label', 'Capture device activity',
-        'description', 'Allow Memact to receive allowed OS-level activity from a local helper.',
+        'label', 'Use device context',
+        'description', 'Allow Memact to use approved OS-level activity signals from a local helper.',
         'grantsGraphRead', false,
         'sensitive', true
       ),
       'schema:write', jsonb_build_object(
-        'label', 'Create schemas',
-        'description', 'Allow Memact to form schema packets from retained activity.',
+        'label', 'Create understanding schemas',
+        'description', 'Allow Memact to turn retained evidence into schema packets for understanding.',
         'grantsGraphRead', false
       ),
       'graph:write', jsonb_build_object(
-        'label', 'Write graph packets',
-        'description', 'Allow Memact to store nodes, edges, and evidence packets created for this app.',
+        'label', 'Write context graph',
+        'description', 'Allow Memact to store nodes, edges, and evidence packets that describe user context for this app.',
         'grantsGraphRead', false
       ),
       'memory:write', jsonb_build_object(
         'label', 'Write memory',
-        'description', 'Allow Memact to persist retained graph evidence as memory.',
+        'description', 'Allow Memact to retain approved context as memory.',
         'grantsGraphRead', false
       ),
       'memory:read_summary', jsonb_build_object(
-        'label', 'Read memory summaries',
-        'description', 'Allow the app to receive compact memory summaries.',
+        'label', 'Read context summaries',
+        'description', 'Allow the app to receive compact summaries of approved user context.',
         'grantsGraphRead', false
       ),
       'memory:read_evidence', jsonb_build_object(
         'label', 'Read evidence cards',
-        'description', 'Allow the app to receive evidence snippets and source metadata.',
+        'description', 'Allow the app to receive approved evidence snippets that explain the context.',
         'grantsGraphRead', false,
         'sensitive', true
       ),
       'memory:read_graph', jsonb_build_object(
-        'label', 'Read graph objects',
-        'description', 'Allow the app to receive permitted nodes and edges.',
+        'label', 'Read context graph',
+        'description', 'Allow the app to receive permitted nodes and edges about approved user context.',
         'grantsGraphRead', true,
         'sensitive', true
       )
@@ -1066,15 +1066,15 @@ as $$
       'dev:code'
     ]::text[]),
     'scopes', jsonb_build_object(
-      'capture:webpage', jsonb_build_object('label', 'Capture webpages', 'description', 'Capture useful webpage content for this app.', 'grantsGraphRead', false),
-      'capture:media', jsonb_build_object('label', 'Capture media context', 'description', 'Capture captions, transcripts, and media context when available.', 'grantsGraphRead', false),
-      'capture:device', jsonb_build_object('label', 'Capture device activity', 'description', 'Receive allowed OS-level activity from a local helper.', 'grantsGraphRead', false, 'sensitive', true),
-      'schema:write', jsonb_build_object('label', 'Create schemas', 'description', 'Form schema packets from retained activity.', 'grantsGraphRead', false),
-      'graph:write', jsonb_build_object('label', 'Write graph packets', 'description', 'Store nodes, edges, and evidence packets created for this app.', 'grantsGraphRead', false),
-      'memory:write', jsonb_build_object('label', 'Write memory', 'description', 'Persist retained graph evidence as memory.', 'grantsGraphRead', false),
-      'memory:read_summary', jsonb_build_object('label', 'Read memory summaries', 'description', 'Receive compact memory summaries.', 'grantsGraphRead', false),
-      'memory:read_evidence', jsonb_build_object('label', 'Read evidence cards', 'description', 'Receive evidence snippets and source metadata.', 'grantsGraphRead', false, 'sensitive', true),
-      'memory:read_graph', jsonb_build_object('label', 'Read graph objects', 'description', 'Receive permitted nodes and edges.', 'grantsGraphRead', true, 'sensitive', true)
+      'capture:webpage', jsonb_build_object('label', 'Use webpage evidence', 'description', 'Use approved webpage evidence to understand activity for this app.', 'grantsGraphRead', false),
+      'capture:media', jsonb_build_object('label', 'Use media evidence', 'description', 'Use approved captions, transcripts, and media context when available.', 'grantsGraphRead', false),
+      'capture:device', jsonb_build_object('label', 'Use device context', 'description', 'Use approved OS-level activity signals from a local helper.', 'grantsGraphRead', false, 'sensitive', true),
+      'schema:write', jsonb_build_object('label', 'Create understanding schemas', 'description', 'Turn retained evidence into schema packets for understanding.', 'grantsGraphRead', false),
+      'graph:write', jsonb_build_object('label', 'Write context graph', 'description', 'Store nodes, edges, and evidence packets that describe user context for this app.', 'grantsGraphRead', false),
+      'memory:write', jsonb_build_object('label', 'Write memory', 'description', 'Retain approved context as memory.', 'grantsGraphRead', false),
+      'memory:read_summary', jsonb_build_object('label', 'Read context summaries', 'description', 'Receive compact summaries of approved user context.', 'grantsGraphRead', false),
+      'memory:read_evidence', jsonb_build_object('label', 'Read evidence cards', 'description', 'Receive approved evidence snippets that explain the context.', 'grantsGraphRead', false, 'sensitive', true),
+      'memory:read_graph', jsonb_build_object('label', 'Read context graph', 'description', 'Receive permitted nodes and edges about approved user context.', 'grantsGraphRead', true, 'sensitive', true)
     ),
     'activity_categories', jsonb_build_object(
       'web:news', jsonb_build_object('label', 'News articles', 'description', 'News, politics, public affairs, and current-event pages.'),
@@ -1089,7 +1089,7 @@ as $$
     ),
     'safety_rules', jsonb_build_object(
       'blockedUseCases', to_jsonb(array[
-        'selling raw personal memory',
+        'selling raw personal context',
         'surveillance without user consent',
         'credit, employment, insurance, or housing decisions',
         'manipulative targeting',
@@ -1099,7 +1099,7 @@ as $$
       'requiredDeveloperPromises', to_jsonb(array[
         'ask for only the scopes needed',
         'respect selected activity categories',
-        'do not sell raw memory or graph data',
+        'do not sell raw memory, context, or graph data',
         'show users where Memact is used',
         'let users disconnect access'
       ]::text[])
@@ -1109,7 +1109,7 @@ as $$
       'graphObjects', to_jsonb(array['evidence','content_unit','node','edge','schema_packet']::text[]),
       'nodeTypes', to_jsonb(array['topic','claim','emotion','source','activity','tool','person','action']::text[]),
       'edgeTypes', to_jsonb(array['seen_in','repeated_with','mentions','shapes','contradicts','supports','clicked_after','searched_after']::text[]),
-      'authority', 'Apps receive scoped graph access. Memact keeps raw capture, filtering, and sensitive exclusions local-first.'
+      'authority', 'Apps receive scoped understanding from approved memory. Memact keeps raw capture, filtering, and sensitive exclusions local-first.'
     )
   );
 $$;

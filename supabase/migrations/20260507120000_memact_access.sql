@@ -149,50 +149,50 @@ as $$
     ]::text[]),
     'scopes', jsonb_build_object(
       'capture:webpage', jsonb_build_object(
-        'label', 'Capture webpages',
-        'description', 'Allow Memact to capture useful webpage content for this app.',
+        'label', 'Use webpage evidence',
+        'description', 'Allow Memact to use approved webpage evidence to understand activity for this app.',
         'grantsGraphRead', false
       ),
       'capture:media', jsonb_build_object(
-        'label', 'Capture media context',
-        'description', 'Allow Memact to capture captions, transcripts, and media context when available.',
+        'label', 'Use media evidence',
+        'description', 'Allow Memact to use approved captions, transcripts, and media context when available.',
         'grantsGraphRead', false
       ),
       'capture:device', jsonb_build_object(
-        'label', 'Capture device activity',
-        'description', 'Allow Memact to receive allowed OS-level activity from a local helper.',
+        'label', 'Use device context',
+        'description', 'Allow Memact to use approved OS-level activity signals from a local helper.',
         'grantsGraphRead', false,
         'sensitive', true
       ),
       'schema:write', jsonb_build_object(
-        'label', 'Create schemas',
-        'description', 'Allow Memact to form schema packets from retained activity.',
+        'label', 'Create understanding schemas',
+        'description', 'Allow Memact to turn retained evidence into schema packets for understanding.',
         'grantsGraphRead', false
       ),
       'graph:write', jsonb_build_object(
-        'label', 'Write graph packets',
-        'description', 'Allow Memact to store nodes, edges, and evidence packets created for this app.',
+        'label', 'Write context graph',
+        'description', 'Allow Memact to store nodes, edges, and evidence packets that describe user context for this app.',
         'grantsGraphRead', false
       ),
       'memory:write', jsonb_build_object(
         'label', 'Write memory',
-        'description', 'Allow Memact to persist retained graph evidence as memory.',
+        'description', 'Allow Memact to retain approved context as memory.',
         'grantsGraphRead', false
       ),
       'memory:read_summary', jsonb_build_object(
-        'label', 'Read memory summaries',
-        'description', 'Allow the app to receive compact memory summaries.',
+        'label', 'Read context summaries',
+        'description', 'Allow the app to receive compact summaries of approved user context.',
         'grantsGraphRead', false
       ),
       'memory:read_evidence', jsonb_build_object(
         'label', 'Read evidence cards',
-        'description', 'Allow the app to receive evidence snippets and source metadata.',
+        'description', 'Allow the app to receive approved evidence snippets that explain the context.',
         'grantsGraphRead', false,
         'sensitive', true
       ),
       'memory:read_graph', jsonb_build_object(
-        'label', 'Read graph objects',
-        'description', 'Allow the app to receive permitted nodes and edges.',
+        'label', 'Read context graph',
+        'description', 'Allow the app to receive permitted nodes and edges about approved user context.',
         'grantsGraphRead', true,
         'sensitive', true
       )

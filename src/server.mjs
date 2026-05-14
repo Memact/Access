@@ -239,6 +239,6 @@ function send(response, status, payload, request) {
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const service = new AccessService(new JsonFileStore(storePath))
   createAccessServer(service).listen(port, host, () => {
-    console.log(`Memact Access listening on http://${host}:${port}`)
+    console.log(`Memact permission layer listening on http://${host}:${port}`)
   })
 }

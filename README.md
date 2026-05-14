@@ -1,4 +1,4 @@
-# Memact Access
+# Memact Permission Layer
 
 Version: `v0.0`
 
@@ -15,8 +15,8 @@ It owns:
 - scope checks
 - audit logs
 
-Access does not capture activity, create nodes, create edges, or read a user's
-memory graph. It decides who is allowed to ask Memact to do work.
+Access does not infer intent, create nodes, create edges, or read a user's
+memory graph. It decides who is allowed to ask Memact for understanding.
 
 Website users sign in with Supabase. Access now works best as a Supabase-backed
 permission layer too, so auth, apps, permissions, and API keys can live in the
@@ -24,8 +24,9 @@ same durable backend.
 
 ## Why This Exists
 
-Memact is becoming infrastructure. Apps should be able to plug into Memact, but
-not by reading a user's private graph.
+Memact is becoming permissioned context infrastructure. Apps should be able to
+understand what a user is doing or trying to do, but not by reading a user's
+private graph or treating captured activity as a raw data feed.
 
 The intended contract is:
 
@@ -33,11 +34,11 @@ The intended contract is:
 app asks for permission
 -> user consents to specific scopes
 -> app receives an API key
--> Memact performs allowed capture/schema work
--> app receives only the permitted output
+-> Memact uses approved evidence, schemas, and memory
+-> app receives only the permitted understanding
 ```
 
-API keys are capability keys, not memory dump keys. A key identifies the app.
+API keys are capability keys, not capture-export keys. A key identifies the app.
 A user-specific `connection_id` identifies the user who approved that app.
 
 ## Default Policy
@@ -57,7 +58,8 @@ Scopes are explicit:
 - `memory:read_evidence`
 - `memory:read_graph`
 
-Raw graph reads are intentionally separate from capture/schema write scopes.
+Raw graph reads are intentionally separate from evidence, schema, and summary
+scopes. The default product result is useful context, not raw captured data.
 
 Activity categories are explicit too:
 
@@ -71,9 +73,9 @@ Activity categories are explicit too:
 - `dev:code`
 - `work:docs`
 
-This lets an app ask Memact to operate only inside the relevant part of a
-user's activity. For example, a news-bias tool can request only `web:news`,
-while an AI-conversation tool can request only `ai:assistant`.
+This lets an app ask Memact to understand only the relevant part of a user's
+activity. For example, a news-bias tool can request only `web:news`, while an
+AI-conversation tool can request only `ai:assistant`.
 
 ## Run Locally
 
@@ -117,7 +119,7 @@ supabase/migrations/20260507203000_connect_categories_guardrails.sql
 
 Then point Website at your Supabase project only.
 
-The Supabase-backed Access layer creates:
+The Supabase-backed permission layer creates:
 
 - `memact_apps`
 - `memact_api_keys`
@@ -206,9 +208,9 @@ Content-Type: application/json
 }
 ```
 
-The response is the allowed app, user connection, approved scopes, and approved
-categories. If the key, connection, scope, or category is missing, the endpoint
-returns an error and the app must not use Memact output.
+The response is the allowed app, user connection, approved scopes, approved
+categories, and policy context. If the key, connection, scope, or category is
+missing, the endpoint returns an error and the app must not request Memact context.
 
 For production, set:
 
@@ -240,7 +242,7 @@ Memact shows:
 - developer website, if provided
 - exact requested scopes in normal language
 - exact activity categories
-- a short safety boundary
+- a short boundary explaining what understanding the app can request
 
 If the user approves, Access creates or updates a consent row and returns a
 `connection_id` through the redirect URL. Future API checks should include both
@@ -252,14 +254,15 @@ If the user cancels, no consent is created and API verification fails.
 
 Access publishes policy guardrails that apps are expected to follow:
 
-- no selling raw personal memory
+- no selling raw personal context
 - no surveillance without user permission
 - no manipulative targeting
 - no political persuasion targeting
 - no credit, employment, insurance, or housing decisions
 - no sensitive trait inference unless the user explicitly asks for it
 
-Capture still handles sensitive source exclusion before graph formation.
+Capture is an evidence layer, not the product sold to apps. Sensitive source
+exclusion still happens before graph formation or memory creation.
 
 ## Security Notes
 
@@ -267,8 +270,8 @@ Capture still handles sensitive source exclusion before graph formation.
 - API keys and session tokens are stored as hashes only.
 - API keys are shown once.
 - Consent is scoped by user and app.
-- Sensitive capture exclusions still happen in Capture before graph formation.
-- Access is not a raw-memory export service.
+- Sensitive capture exclusions still happen before graph formation.
+- Access is not a raw-memory or raw-capture export service.
 
 ## Render
 
