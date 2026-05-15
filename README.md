@@ -25,7 +25,7 @@ same durable backend.
 ## Why This Exists
 
 Memact is becoming permissioned context infrastructure. Apps should be able to
-understand what a user is doing or trying to do, but not by reading a user's
+understand users' digital activity, but not by reading a user's
 private graph or treating captured activity as a raw data feed.
 
 The intended contract is:
@@ -117,6 +117,7 @@ supabase/migrations/20260507190000_qualify_access_crypto.sql
 supabase/migrations/20260507203000_connect_categories_guardrails.sql
 supabase/migrations/20260508103000_stabilize_access_rpcs.sql
 supabase/migrations/20260515103000_understanding_strategy.sql
+supabase/migrations/20260515120000_compiled_policies.sql
 ```
 
 Then point Website at your Supabase project only.
@@ -231,7 +232,7 @@ Example response shape:
   "categories": ["web:news"],
   "understanding_strategy": {
     "product": "permissioned_understanding",
-    "tagline": "Understand what users are trying to do.",
+    "tagline": "Understand users' digital activity.",
     "capture_plan": {
       "local_only_raw_capture": true,
       "allowed_inputs": ["article url", "headline", "selected article text"]
@@ -259,6 +260,22 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=your-public-anon-key
 The Supabase anon key is Memact infrastructure for this service. Third-party
 app developers should not configure it in their apps; they only keep their raw
 `mka_...` app key server-side.
+
+## Supabase Dependency Boundary
+
+Supabase currently handles hosted auth, durable app/key/consent metadata, and
+the Postgres RPC surface used by the Website. That does not make Memact a
+Supabase wrapper. The Memact-owned pieces are the permission registry, activity
+category registry, category-permission matrix, compiled policy, understanding
+strategy, local capture store, local memory adapters, and SDK/API contract.
+
+The sustainable path is:
+
+- keep Supabase as a replaceable hosted access backend for now
+- keep capture and raw evidence local-first
+- keep memory local/file-adapter based by default
+- add user-owned cloud storage for cross-platform sync
+- keep customer apps talking to Memact HTTP APIs, never Supabase RPCs
 
 App names stay unique per user after normalizing spaces and punctuation.
 Deleting an app revokes its active API keys and saved permissions.

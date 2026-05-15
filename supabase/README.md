@@ -18,6 +18,9 @@ supabase/migrations/20260507120000_memact_access.sql
 supabase/migrations/20260507171000_fix_api_key_entropy.sql
 supabase/migrations/20260507190000_qualify_access_crypto.sql
 supabase/migrations/20260507203000_connect_categories_guardrails.sql
+supabase/migrations/20260508103000_stabilize_access_rpcs.sql
+supabase/migrations/20260515103000_understanding_strategy.sql
+supabase/migrations/20260515120000_compiled_policies.sql
 ```
 
 That migration creates:

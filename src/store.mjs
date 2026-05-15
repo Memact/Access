@@ -67,7 +67,8 @@ export function migrateStore(data) {
     apps: Array.isArray(base.apps)
       ? base.apps.map((app) => ({
         ...app,
-        slug: app.slug || normalizeAppName(app.name)
+        slug: app.slug || normalizeAppName(app.name),
+        compiled_policy: app.compiled_policy || null
       }))
       : [],
     api_keys: Array.isArray(base.api_keys)
@@ -76,7 +77,12 @@ export function migrateStore(data) {
         first_used_notified_at: key.first_used_notified_at || null
       }))
       : [],
-    consents: Array.isArray(base.consents) ? base.consents : [],
+    consents: Array.isArray(base.consents)
+      ? base.consents.map((consent) => ({
+        ...consent,
+        compiled_policy: consent.compiled_policy || null
+      }))
+      : [],
     audit_log: Array.isArray(base.audit_log) ? base.audit_log : []
   }
 }

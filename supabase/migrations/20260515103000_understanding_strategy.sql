@@ -77,7 +77,7 @@ as $$
   select jsonb_build_object(
     'id', 'understanding_' || substr(encode(extensions.digest(array_to_string((select scopes from clean), '+') || '__' || array_to_string((select categories from clean), '+'), 'sha256'), 'hex'), 1, 12),
     'product', 'permissioned_understanding',
-    'tagline', 'Understand what users are trying to do.',
+    'tagline', 'Understand users'' digital activity.',
     'summary', 'Use approved activity categories to produce scoped context, not raw capture.',
     'scopes', to_jsonb((select scopes from clean)),
     'categories', to_jsonb((select categories from clean)),

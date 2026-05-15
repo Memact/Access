@@ -2,7 +2,7 @@ import test from "node:test"
 import assert from "node:assert/strict"
 import fs from "node:fs/promises"
 
-const latestMigrationPath = new URL("../supabase/migrations/20260515103000_understanding_strategy.sql", import.meta.url)
+const latestMigrationPath = new URL("../supabase/migrations/20260515120000_compiled_policies.sql", import.meta.url)
 const fullInstallPath = new URL("../supabase/memact_access_full_install.sql", import.meta.url)
 
 test("latest Supabase SQL qualifies pgcrypto calls through the extensions schema", async () => {
@@ -45,10 +45,23 @@ test("Supabase verification returns a permissioned understanding strategy", asyn
 
   for (const sql of [migration, fullInstall]) {
     assert.match(sql, /memact_understanding_strategy/)
-    assert.match(sql, /'understanding_strategy', public\.memact_understanding_strategy\(effective_scopes, effective_categories\)/)
-    assert.match(sql, /Understand what users are trying to do\./)
+    assert.match(sql, /'understanding_strategy', compiled->'strategy'/)
+    assert.match(sql, /Understand users'' digital activity\./)
     assert.match(sql, /Local-first memory/)
     assert.match(sql, /user-owned-cloud-memory/)
+  }
+})
+
+test("Supabase SQL stores compiled policies separately from raw permission choices", async () => {
+  const migration = await fs.readFile(latestMigrationPath, "utf8")
+  const fullInstall = await fs.readFile(fullInstallPath, "utf8")
+
+  for (const sql of [migration, fullInstall]) {
+    assert.match(sql, /add column if not exists compiled_policy jsonb/)
+    assert.match(sql, /memact_compile_policy/)
+    assert.match(sql, /memact_apps_compile_policy/)
+    assert.match(sql, /memact_consents_compile_policy/)
+    assert.match(sql, /'compiled_policy', compiled/)
   }
 })
 

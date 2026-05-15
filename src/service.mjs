@@ -1,8 +1,12 @@
 import { hashPassword, hashSecret, randomId, randomToken, verifyPassword } from "./crypto.mjs"
 import {
   CATEGORY_DEFINITIONS,
+  ACTIVITY_CATEGORY_REGISTRY,
   buildPermissionSuggestion,
+  buildPresetSuggestions,
   buildUnderstandingStrategy,
+  compilePolicy,
+  CATEGORY_PERMISSION_MATRIX,
   DEFAULT_APP_CATEGORIES,
   DEFAULT_APP_SCOPES,
   hasAllCategories,
@@ -10,6 +14,7 @@ import {
   KNOWLEDGE_GRAPH_CONTRACT,
   normalizeCategories,
   normalizeScopes,
+  PERMISSION_REGISTRY,
   SAFETY_RULES,
   SCOPE_DEFINITIONS,
   unknownCategories,
@@ -138,10 +143,22 @@ export class AccessService {
         redirect_urls: Array.isArray(redirect_urls) ? redirect_urls.map(String).slice(0, 10) : [],
         default_scopes: [...DEFAULT_APP_SCOPES],
         default_categories: cleanCategories,
+        compiled_policy: compilePolicy({
+          appId: "",
+          scopes: [],
+          categories: cleanCategories,
+          appPurpose: cleanName
+        }),
         created_at: timestamp(this.now()),
         updated_at: timestamp(this.now()),
         revoked_at: null
       }
+      app.compiled_policy = compilePolicy({
+        appId: app.id,
+        scopes: [],
+        categories: cleanCategories,
+        appPurpose: app.description || app.name
+      })
       data.apps.push(app)
       audit(data, userId, "app.create", { app_id: app.id })
       return { app }
@@ -252,6 +269,12 @@ export class AccessService {
       if (existing) {
         existing.scopes = cleanScopes
         existing.categories = cleanCategories
+        existing.compiled_policy = compilePolicy({
+          appId: app.id,
+          scopes: cleanScopes,
+          categories: cleanCategories,
+          appPurpose: app.description || app.name
+        })
         existing.updated_at = timestamp(this.now())
         audit(data, userId, "consent.update", { app_id: app.id, scopes: cleanScopes, categories: cleanCategories })
         return { consent: existing }
@@ -262,6 +285,12 @@ export class AccessService {
         app_id: app.id,
         scopes: cleanScopes,
         categories: cleanCategories,
+        compiled_policy: compilePolicy({
+          appId: app.id,
+          scopes: cleanScopes,
+          categories: cleanCategories,
+          appPurpose: app.description || app.name
+        }),
         created_at: timestamp(this.now()),
         updated_at: timestamp(this.now()),
         revoked_at: null
@@ -334,6 +363,12 @@ export class AccessService {
         app: publicApp(app),
         scopes: effectiveScopes,
         categories: effectiveCategories,
+        compiled_policy: compilePolicy({
+          appId: app.id,
+          scopes: effectiveScopes,
+          categories: effectiveCategories,
+          appPurpose: app.description || app.name
+        }),
         understanding_strategy: buildUnderstandingStrategy({
           scopes: effectiveScopes,
           categories: effectiveCategories
@@ -360,6 +395,10 @@ export class AccessService {
       scopes: SCOPE_DEFINITIONS,
       activity_categories: CATEGORY_DEFINITIONS,
       permission_suggestion: buildPermissionSuggestion(cleanCategories.length ? cleanCategories : normalizeCategories(app.default_categories || DEFAULT_APP_CATEGORIES)),
+      preset_suggestions: buildPresetSuggestions({
+        categories: cleanCategories.length ? cleanCategories : normalizeCategories(app.default_categories || DEFAULT_APP_CATEGORIES),
+        appPurpose: app.description || app.name
+      }),
       safety_rules: SAFETY_RULES
     }
   }
@@ -381,10 +420,14 @@ export class AccessService {
     return {
       plan: "free_unlimited",
       scopes: SCOPE_DEFINITIONS,
+      permission_registry: PERMISSION_REGISTRY,
       default_app_scopes: DEFAULT_APP_SCOPES,
       activity_categories: CATEGORY_DEFINITIONS,
+      activity_category_registry: ACTIVITY_CATEGORY_REGISTRY,
+      category_permission_matrix: CATEGORY_PERMISSION_MATRIX,
       default_app_categories: DEFAULT_APP_CATEGORIES,
       permission_suggestion: buildPermissionSuggestion(DEFAULT_APP_CATEGORIES),
+      preset_suggestions: buildPresetSuggestions({ categories: DEFAULT_APP_CATEGORIES }),
       permission_suggestions: Object.fromEntries(
         Object.keys(CATEGORY_DEFINITIONS).map((category) => [category, buildPermissionSuggestion([category])])
       ),
@@ -586,6 +629,7 @@ function publicApp(app) {
     redirect_urls: app.redirect_urls || [],
     default_scopes: app.default_scopes,
     default_categories: app.default_categories || DEFAULT_APP_CATEGORIES,
+    compiled_policy: app.compiled_policy || null,
     created_at: app.created_at,
     revoked_at: app.revoked_at
   }
