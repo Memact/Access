@@ -1,6 +1,8 @@
 import { hashPassword, hashSecret, randomId, randomToken, verifyPassword } from "./crypto.mjs"
 import {
   CATEGORY_DEFINITIONS,
+  buildPermissionSuggestion,
+  buildUnderstandingStrategy,
   DEFAULT_APP_CATEGORIES,
   DEFAULT_APP_SCOPES,
   hasAllCategories,
@@ -332,6 +334,10 @@ export class AccessService {
         app: publicApp(app),
         scopes: effectiveScopes,
         categories: effectiveCategories,
+        understanding_strategy: buildUnderstandingStrategy({
+          scopes: effectiveScopes,
+          categories: effectiveCategories
+        }),
         policy: {
           plan: "free_unlimited",
           graph_read_allowed: effectiveScopes.includes("memory:read_graph")
@@ -353,6 +359,7 @@ export class AccessService {
       requested_categories: cleanCategories.length ? cleanCategories : normalizeCategories(app.default_categories || DEFAULT_APP_CATEGORIES),
       scopes: SCOPE_DEFINITIONS,
       activity_categories: CATEGORY_DEFINITIONS,
+      permission_suggestion: buildPermissionSuggestion(cleanCategories.length ? cleanCategories : normalizeCategories(app.default_categories || DEFAULT_APP_CATEGORIES)),
       safety_rules: SAFETY_RULES
     }
   }
@@ -377,6 +384,10 @@ export class AccessService {
       default_app_scopes: DEFAULT_APP_SCOPES,
       activity_categories: CATEGORY_DEFINITIONS,
       default_app_categories: DEFAULT_APP_CATEGORIES,
+      permission_suggestion: buildPermissionSuggestion(DEFAULT_APP_CATEGORIES),
+      permission_suggestions: Object.fromEntries(
+        Object.keys(CATEGORY_DEFINITIONS).map((category) => [category, buildPermissionSuggestion([category])])
+      ),
       safety_rules: SAFETY_RULES,
       knowledge_graph_contract: KNOWLEDGE_GRAPH_CONTRACT
     }

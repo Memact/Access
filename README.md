@@ -115,6 +115,8 @@ supabase/migrations/20260507120000_memact_access.sql
 supabase/migrations/20260507171000_fix_api_key_entropy.sql
 supabase/migrations/20260507190000_qualify_access_crypto.sql
 supabase/migrations/20260507203000_connect_categories_guardrails.sql
+supabase/migrations/20260508103000_stabilize_access_rpcs.sql
+supabase/migrations/20260515103000_understanding_strategy.sql
 ```
 
 Then point Website at your Supabase project only.
@@ -209,8 +211,42 @@ Content-Type: application/json
 ```
 
 The response is the allowed app, user connection, approved scopes, approved
-categories, and policy context. If the key, connection, scope, or category is
-missing, the endpoint returns an error and the app must not request Memact context.
+categories, policy context, and an `understanding_strategy`. If the key,
+connection, scope, or category is missing, the endpoint returns an error and the
+app must not request Memact context.
+
+`understanding_strategy` is the important product contract. It is generated from
+the effective API-key scopes, user consent, and activity categories. A news
+article app gets a news/article strategy with article evidence, claims, sources,
+reading intent, schema packets, and memory outputs. A coding app gets a developer
+workflow strategy. A mixed category request gets a mixed strategy. Apps should
+follow this object instead of treating Memact as a generic capture export.
+
+Example response shape:
+
+```json
+{
+  "allowed": true,
+  "scopes": ["capture:webpage", "schema:write", "memory:read_summary"],
+  "categories": ["web:news"],
+  "understanding_strategy": {
+    "product": "permissioned_understanding",
+    "tagline": "Understand what users are trying to do.",
+    "capture_plan": {
+      "local_only_raw_capture": true,
+      "allowed_inputs": ["article url", "headline", "selected article text"]
+    },
+    "understanding_plan": {
+      "outputs": ["main claim", "supporting evidence", "reading intent"]
+    },
+    "delivery_plan": {
+      "summaries": true,
+      "evidence_cards": false,
+      "graph_objects": false
+    }
+  }
+}
+```
 
 For production, set:
 

@@ -99,6 +99,10 @@ test("API access is limited by activity categories", async () => {
   assert.equal(allowed.allowed, true)
   assert.deepEqual(allowed.categories, ["web:news"])
   assert.equal(Object.hasOwn(key.api_key, "categories"), false)
+  assert.equal(allowed.understanding_strategy.product, "permissioned_understanding")
+  assert.equal(allowed.understanding_strategy.tagline, "Understand what users are trying to do.")
+  assert.ok(allowed.understanding_strategy.capture_plan.allowed_inputs.includes("headline"))
+  assert.ok(allowed.understanding_strategy.understanding_plan.outputs.includes("reading intent"))
 
   await assert.rejects(
     () => service.verifyApiAccess(key.key, ["capture:webpage"], ["ai:assistant"]),
@@ -137,6 +141,15 @@ test("connect flow grants a user-specific connection id", async () => {
   assert.equal(allowed.allowed, true)
   assert.equal(allowed.user_id, user.user.id)
   assert.equal(allowed.connection_id, connected.consent.id)
+})
+
+test("policy suggests selected default permissions from activity categories", async () => {
+  const service = new AccessService(new MemoryStore())
+  const policy = await service.policy()
+
+  assert.ok(policy.permission_suggestion.scopes.includes("capture:webpage"))
+  assert.ok(policy.permission_suggestions["media:video"].scopes.includes("capture:media"))
+  assert.ok(policy.permission_suggestions["web:social"].scopes.includes("memory:read_evidence"))
 })
 
 test("unknown scopes are rejected instead of silently accepted", async () => {
