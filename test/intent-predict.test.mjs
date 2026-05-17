@@ -4,6 +4,15 @@ import { createAccessServer } from "../src/server.mjs"
 import { AccessService } from "../src/service.mjs"
 import { MemoryStore } from "../src/store.mjs"
 import { predictPermissionedIntent } from "../src/intent-service.mjs"
+import { loadPredictIntent } from "../src/intent-engine.mjs"
+
+test("Access can load the Intent engine from the local integration", async () => {
+  const predictIntent = await loadPredictIntent()
+  const result = predictIntent({ activities: researchActivities() }, { now: "2026-05-17T10:10:00.000Z" })
+
+  assert.equal(typeof predictIntent, "function")
+  assert.equal(result.schema_version, "memact.intent.v0")
+})
 
 test("intent prediction verifies key, connection, scope, and approved category", async () => {
   const { service, key, consent } = await setupIntentAccess()
@@ -21,6 +30,24 @@ test("intent prediction verifies key, connection, scope, and approved category",
   assert.equal(result.intent.predicted_intents[0].id, "intent:research_learning")
   assert.ok(result.intent.predicted_intents[0].blocked_actions.length > 0)
   assert.equal(result.intent.safety.raw_capture_exposed, false)
+})
+
+test("intent prediction fails gracefully when the engine is unavailable", async () => {
+  const { service, key, consent } = await setupIntentAccess()
+
+  await assert.rejects(
+    () => predictPermissionedIntent({
+      service,
+      apiKey: key.key,
+      connectionId: consent.consent.id,
+      activityCategories: ["web:research"],
+      activities: researchActivities(),
+      loadIntent: async () => {
+        throw new Error("missing Intent engine")
+      }
+    }),
+    /Intent prediction is temporarily unavailable/
+  )
 })
 
 test("intent prediction fails without a valid API key", async () => {

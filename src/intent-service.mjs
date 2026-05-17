@@ -1,4 +1,4 @@
-import { predictIntent as defaultPredictIntent } from "../../intent/src/engine.mjs"
+import { loadPredictIntent } from "./intent-engine.mjs"
 import { normalizeCategories } from "./policy.mjs"
 import { AccessError } from "./service.mjs"
 
@@ -11,7 +11,8 @@ export async function predictPermissionedIntent({
   requiredScopes = [],
   activityCategories = [],
   activities = [],
-  predictIntent = defaultPredictIntent,
+  predictIntent,
+  loadIntent = loadPredictIntent,
   now
 } = {}) {
   if (!service) {
@@ -20,14 +21,17 @@ export async function predictPermissionedIntent({
 
   const requestedScopes = normalizeIntentScopes(requiredScopes)
   const access = await service.verifyApiAccess(apiKey, requestedScopes, [], connectionId)
-  return buildPermissionedIntentResponse({ access, activityCategories, activities, predictIntent, now })
+  const engine = predictIntent || await loadIntent().catch((error) => {
+    throw new AccessError(503, "intent_engine_unavailable", safeIntentEngineMessage(error))
+  })
+  return buildPermissionedIntentResponse({ access, activityCategories, activities, predictIntent: engine, now })
 }
 
 export function buildPermissionedIntentResponse({
   access,
   activityCategories = [],
   activities = [],
-  predictIntent = defaultPredictIntent,
+  predictIntent,
   now
 } = {}) {
   if (!access?.allowed) {
@@ -43,6 +47,10 @@ export function buildPermissionedIntentResponse({
   const approvedActivities = normalizeActivityList(activities)
     .filter((activity) => allowedCategorySet.has(String(activity.category || "").trim()))
 
+  if (typeof predictIntent !== "function") {
+    throw new AccessError(503, "intent_engine_unavailable", "Intent prediction is temporarily unavailable.")
+  }
+
   const intent = predictIntent({ activities: approvedActivities }, now ? { now } : {})
 
   return {
@@ -55,6 +63,13 @@ export function buildPermissionedIntentResponse({
     filtered_activity_count: approvedActivities.length,
     intent
   }
+}
+
+function safeIntentEngineMessage(error) {
+  if (process.env.NODE_ENV === "test") {
+    return error?.message || "Intent prediction is temporarily unavailable."
+  }
+  return "Intent prediction is temporarily unavailable."
 }
 
 function normalizeIntentScopes(requiredScopes = []) {
