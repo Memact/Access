@@ -1027,7 +1027,8 @@ as $$
     'memory:write',
     'memory:read_summary',
     'memory:read_evidence',
-    'memory:read_graph'
+    'memory:read_graph',
+    'intent:predict'
   ]::text[];
 $$;
 
@@ -1056,7 +1057,8 @@ as $$
       'schema:write',
       'graph:write',
       'memory:write',
-      'memory:read_summary'
+      'memory:read_summary',
+      'intent:predict'
     ]::text[]),
     'default_app_categories', to_jsonb(array[
       'web:news',
@@ -1074,7 +1076,8 @@ as $$
       'memory:write', jsonb_build_object('label', 'Write memory', 'description', 'Retain approved context as memory.', 'grantsGraphRead', false),
       'memory:read_summary', jsonb_build_object('label', 'Read context summaries', 'description', 'Receive compact summaries of approved user context.', 'grantsGraphRead', false),
       'memory:read_evidence', jsonb_build_object('label', 'Read evidence cards', 'description', 'Receive approved evidence snippets that explain the context.', 'grantsGraphRead', false, 'sensitive', true),
-      'memory:read_graph', jsonb_build_object('label', 'Read context graph', 'description', 'Receive permitted nodes and edges about approved user context.', 'grantsGraphRead', true, 'sensitive', true)
+      'memory:read_graph', jsonb_build_object('label', 'Read context graph', 'description', 'Receive permitted nodes and edges about approved user context.', 'grantsGraphRead', true, 'sensitive', true),
+      'intent:predict', jsonb_build_object('label', 'Predict intent', 'description', 'Ask Memact for evidence-backed intent hypotheses from approved activity.', 'grantsGraphRead', false, 'sensitive', true)
     ),
     'activity_categories', jsonb_build_object(
       'web:news', jsonb_build_object('label', 'News articles', 'description', 'News, politics, public affairs, and current-event pages.'),
@@ -1577,7 +1580,7 @@ as $$
   select jsonb_build_object(
     'id', 'understanding_' || substr(encode(extensions.digest(array_to_string((select scopes from clean), '+') || '__' || array_to_string((select categories from clean), '+'), 'sha256'), 'hex'), 1, 12),
     'product', 'permissioned_understanding',
-    'tagline', 'Understand users'' digital activity.',
+    'tagline', 'Understand what users are trying to do.',
     'summary', 'Use approved activity categories to produce scoped context, not raw capture.',
     'scopes', to_jsonb((select scopes from clean)),
     'categories', to_jsonb((select categories from clean)),
@@ -1595,7 +1598,8 @@ as $$
     'delivery_plan', jsonb_build_object(
       'summaries', 'memory:read_summary' = any((select scopes from clean)),
       'evidence_cards', 'memory:read_evidence' = any((select scopes from clean)),
-      'graph_objects', 'memory:read_graph' = any((select scopes from clean))
+      'graph_objects', 'memory:read_graph' = any((select scopes from clean)),
+      'intent_predictions', 'intent:predict' = any((select scopes from clean))
     ),
     'storage_plan', jsonb_build_object(
       'default', jsonb_build_object('id', 'local-first-memory', 'label', 'Local-first memory', 'description', 'Capture packets and raw evidence stay local by default. Apps receive only verified understanding allowed by consent.'),
@@ -1702,7 +1706,7 @@ as $$
     'id', 'policy_' || substr(encode(extensions.digest(coalesce(app_id_input::text, '') || '__' || array_to_string((select scopes from clean), '+') || '__' || array_to_string((select categories from clean), '+') || '__' || (select purpose from clean), 'sha256'), 'hex'), 1, 12),
     'app_id', app_id_input,
     'product', 'permissioned_understanding',
-    'tagline', 'Understand users'' digital activity.',
+    'tagline', 'Understand what users are trying to do.',
     'purpose', (select purpose from clean),
     'scopes', to_jsonb((select scopes from clean)),
     'categories', to_jsonb((select categories from clean)),

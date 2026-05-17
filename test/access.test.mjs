@@ -100,7 +100,7 @@ test("API access is limited by activity categories", async () => {
   assert.deepEqual(allowed.categories, ["web:news"])
   assert.equal(Object.hasOwn(key.api_key, "categories"), false)
   assert.equal(allowed.understanding_strategy.product, "permissioned_understanding")
-  assert.equal(allowed.understanding_strategy.tagline, "Understand users' digital activity.")
+  assert.equal(allowed.understanding_strategy.tagline, "Understand what users are trying to do.")
   assert.equal(allowed.compiled_policy.product, "permissioned_understanding")
   assert.equal(allowed.compiled_policy.strategy.id, allowed.understanding_strategy.id)
   assert.ok(allowed.understanding_strategy.capture_plan.allowed_inputs.includes("headline"))

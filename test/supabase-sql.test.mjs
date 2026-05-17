@@ -46,9 +46,19 @@ test("Supabase verification returns a permissioned understanding strategy", asyn
   for (const sql of [migration, fullInstall]) {
     assert.match(sql, /memact_understanding_strategy/)
     assert.match(sql, /'understanding_strategy', compiled->'strategy'/)
-    assert.match(sql, /Understand users'' digital activity\./)
+    assert.match(sql, /Understand what users are trying to do\./)
     assert.match(sql, /Local-first memory/)
     assert.match(sql, /user-owned-cloud-memory/)
+  }
+})
+
+test("Supabase SQL exposes the intent prediction scope", async () => {
+  const migration = await fs.readFile(new URL("../supabase/migrations/20260517120000_intent_predict_scope.sql", import.meta.url), "utf8")
+  const fullInstall = await fs.readFile(fullInstallPath, "utf8")
+
+  for (const sql of [migration, fullInstall]) {
+    assert.match(sql, /intent:predict/)
+    assert.match(sql, /Predict intent/)
   }
 })
 

@@ -51,7 +51,7 @@ as $$
     'id', 'policy_' || substr(encode(extensions.digest(coalesce(app_id_input::text, '') || '__' || array_to_string((select scopes from clean), '+') || '__' || array_to_string((select categories from clean), '+') || '__' || (select purpose from clean), 'sha256'), 'hex'), 1, 12),
     'app_id', app_id_input,
     'product', 'permissioned_understanding',
-    'tagline', 'Understand users'' digital activity.',
+    'tagline', 'Understand what users are trying to do.',
     'purpose', (select purpose from clean),
     'scopes', to_jsonb((select scopes from clean)),
     'categories', to_jsonb((select categories from clean)),

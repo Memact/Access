@@ -46,6 +46,12 @@ export const SCOPE_DEFINITIONS = Object.freeze({
     description: "Allow the app to receive permitted nodes and edges about approved user context.",
     grantsGraphRead: true,
     sensitive: true
+  },
+  "intent:predict": {
+    label: "Predict intent",
+    description: "Allow the app to ask Memact for evidence-backed intent hypotheses from approved activity.",
+    grantsGraphRead: false,
+    sensitive: true
   }
 })
 
@@ -54,7 +60,8 @@ export const DEFAULT_APP_SCOPES = Object.freeze([
   "schema:write",
   "graph:write",
   "memory:write",
-  "memory:read_summary"
+  "memory:read_summary",
+  "intent:predict"
 ])
 
 export const CATEGORY_DEFINITIONS = Object.freeze({
@@ -296,7 +303,7 @@ export function compilePolicy({ appId = "", scopes = [], categories = [], appPur
     id: createPolicyId(appId, cleanScopes, cleanCategories, appPurpose),
     app_id: appId,
     product: "permissioned_understanding",
-    tagline: "Understand users' digital activity.",
+    tagline: "Understand what users are trying to do.",
     purpose: String(appPurpose || "").trim().slice(0, 240),
     scopes: cleanScopes,
     categories: cleanCategories,
@@ -330,7 +337,7 @@ export function buildUnderstandingStrategy({ scopes = [], categories = [] } = {}
   return {
     id: createStrategyId(cleanScopes, cleanCategories),
     product: "permissioned_understanding",
-    tagline: "Understand users' digital activity.",
+    tagline: "Understand what users are trying to do.",
     summary: buildStrategySummary(cleanScopes, cleanCategories),
     scopes: cleanScopes,
     categories: cleanCategories,
@@ -484,6 +491,7 @@ function buildCategoryPermissionMatrix() {
 
 function permissionStatusForCategory(scope, category) {
   if (scope === "memory:read_graph") return "risky"
+  if (scope === "intent:predict") return "recommended"
   if (scope === "capture:device" && !["dev:code", "ai:assistant", "work:docs"].includes(category)) return "risky"
   if (scope === "capture:media") return category.startsWith("media:") ? "recommended" : category === "web:social" ? "allowed" : "blocked"
   if (scope === "capture:webpage") return category.startsWith("web:") || ["ai:assistant", "dev:code", "work:docs"].includes(category) ? "recommended" : "allowed"
@@ -500,6 +508,7 @@ function permissionInputs(scope) {
   if (scope === "schema:write") return ["approved evidence packets", "content units", "candidate nodes and edges"]
   if (scope === "graph:write") return ["schema packets", "evidence links", "approved nodes and edges"]
   if (scope === "memory:write") return ["retained schema packets", "approved summaries", "evidence-backed context"]
+  if (scope === "intent:predict") return ["approved activity metadata", "approved evidence labels", "approved activity categories"]
   return ["compiled memory objects allowed by consent"]
 }
 
@@ -507,6 +516,7 @@ function permissionOutputs(scope) {
   if (scope === "memory:read_summary") return ["compact context summaries"]
   if (scope === "memory:read_evidence") return ["evidence cards", "source snippets", "reasoning support"]
   if (scope === "memory:read_graph") return ["permitted nodes", "permitted edges", "graph metadata"]
+  if (scope === "intent:predict") return ["evidence-backed intent hypotheses", "allowed actions", "blocked actions", "safety object"]
   if (scope.startsWith("capture:")) return ["local evidence signals"]
   if (scope === "schema:write") return ["schema packets"]
   if (scope === "graph:write") return ["context graph writes"]
@@ -519,6 +529,7 @@ function permissionStorageEffects(scope) {
   if (scope === "schema:write") return ["schema packets may be formed"]
   if (scope === "graph:write") return ["nodes, edges, and evidence links may be written"]
   if (scope === "memory:write") return ["approved context may be retained as memory"]
+  if (scope === "intent:predict") return ["read-only prediction; no raw capture storage by this permission alone"]
   return ["read-only delivery; no new storage by this permission alone"]
 }
 
