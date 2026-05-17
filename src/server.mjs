@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url"
 import { loadLocalEnv } from "./env.mjs"
 import { JsonFileStore } from "./store.mjs"
 import { AccessError, AccessService } from "./service.mjs"
+import { buildPermissionedIntentResponse, predictPermissionedIntent } from "./intent-service.mjs"
 import { CATEGORY_DEFINITIONS, KNOWLEDGE_GRAPH_CONTRACT, SAFETY_RULES, SENSITIVE_CAPTURE_RULES } from "./policy.mjs"
 
 loadLocalEnv()
@@ -81,6 +82,30 @@ async function route(service, request, url, body) {
       body?.activity_categories || [],
       body?.connection_id || ""
     )
+  }
+  if (request.method === "POST" && path === "/v1/intent/predict") {
+    if (usesSupabaseVerification()) {
+      const access = await verifySupabaseApiAccess(request, {
+        connection_id: body?.connection_id || "",
+        required_scopes: ["intent:predict", ...(Array.isArray(body?.required_scopes) ? body.required_scopes : [])],
+        activity_categories: []
+      })
+      return buildPermissionedIntentResponse({
+        access,
+        activityCategories: body?.activity_categories || [],
+        activities: body?.activities || [],
+        now: body?.now
+      })
+    }
+    return predictPermissionedIntent({
+      service,
+      apiKey: readMemactApiKey(request),
+      connectionId: body?.connection_id || "",
+      requiredScopes: body?.required_scopes || [],
+      activityCategories: body?.activity_categories || [],
+      activities: body?.activities || [],
+      now: body?.now
+    })
   }
 
   const auth = await service.authenticateSession(request.headers.authorization)
