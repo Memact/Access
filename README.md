@@ -4,7 +4,13 @@ Version: `v0.0`
 
 Access is the permission layer for Memact.
 
-It owns:
+It owns one job:
+
+```text
+control who can ask Memact for what
+```
+
+## What This Repo Owns
 
 - user signup and signin
 - password hashing
@@ -13,10 +19,23 @@ It owns:
 - API key creation and revocation
 - consent records
 - scope checks
+- activity category checks
+- revocation checks
 - audit logs
+- permission policy compilation and app-facing gateway routes
 
-Access does not infer intent, create nodes, create edges, or read a user's
-memory graph. It decides who is allowed to ask Memact for understanding.
+## What This Repo Does Not Own
+
+- capture recording
+- semantic understanding
+- durable schema grouping
+- intent prediction rules
+- memory storage or retrieval logic
+- raw private data export
+
+Access does not infer intent, create nodes, create edges, predict goals, or read
+a user's memory graph. It decides whether an app is allowed to ask Memact for a
+scoped operation.
 
 Website users sign in with Supabase. Access now works best as a Supabase-backed
 permission layer too, so auth, apps, permissions, and API keys can live in the
@@ -34,8 +53,8 @@ The intended contract is:
 app asks for permission
 -> user consents to specific scopes
 -> app receives an API key
--> Memact uses approved evidence, schemas, and memory
--> app receives only the permitted understanding
+-> Memact uses approved evidence, semantic records, schemas, intent, and memory
+-> app receives only the permitted scoped output
 ```
 
 API keys are capability keys, not capture-export keys. A key identifies the app.
@@ -218,10 +237,11 @@ categories, policy context, and an `understanding_strategy`. If the key,
 connection, scope, or category is missing, the endpoint returns an error and the
 app must not request Memact context.
 
-`understanding_strategy` is the important product contract. It is generated from
-the effective API-key scopes, user consent, and activity categories. A news
-article app gets a news/article strategy with article evidence, claims, sources,
-reading intent, schema packets, and memory outputs. A coding app gets a developer
+`understanding_strategy` is a permission strategy and routing contract. It is
+generated from the effective API-key scopes, user consent, and activity
+categories. It does not infer meaning itself. A news article app can get a
+news/article strategy with allowed evidence fields, intended semantic outputs,
+intent signals, schema packets, and memory outputs. A coding app gets a developer
 workflow strategy. A mixed category request gets a mixed strategy. Apps should
 follow this object instead of treating Memact as a generic capture export.
 
