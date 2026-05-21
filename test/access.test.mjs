@@ -99,12 +99,12 @@ test("API access is limited by activity categories", async () => {
   assert.equal(allowed.allowed, true)
   assert.deepEqual(allowed.categories, ["web:news"])
   assert.equal(Object.hasOwn(key.api_key, "categories"), false)
-  assert.equal(allowed.understanding_strategy.product, "permissioned_understanding")
-  assert.equal(allowed.understanding_strategy.tagline, "Understand what users are trying to do.")
-  assert.equal(allowed.compiled_policy.product, "permissioned_understanding")
+  assert.equal(allowed.understanding_strategy.product, "memact")
+  assert.equal(allowed.understanding_strategy.tagline, "Personalization made better")
+  assert.equal(allowed.compiled_policy.product, "memact")
   assert.equal(allowed.compiled_policy.strategy.id, allowed.understanding_strategy.id)
   assert.ok(allowed.understanding_strategy.capture_plan.allowed_inputs.includes("headline"))
-  assert.ok(allowed.understanding_strategy.understanding_plan.outputs.includes("reading intent"))
+  assert.ok(allowed.understanding_strategy.understanding_plan.outputs.includes("reading purpose"))
 
   await assert.rejects(
     () => service.verifyApiAccess(key.key, ["capture:webpage"], ["ai:assistant"]),
@@ -150,9 +150,9 @@ test("policy suggests selected default permissions from activity categories", as
   const policy = await service.policy()
 
   assert.ok(policy.permission_suggestion.scopes.includes("capture:webpage"))
-  assert.ok(policy.permission_suggestion.scopes.includes("intent:predict"))
-  assert.equal(policy.default_app_scopes.includes("intent:predict"), false)
-  assert.ok(Object.hasOwn(policy.scopes, "intent:predict"))
+  assert.ok(policy.permission_suggestion.scopes.includes("capture:event_write"))
+  assert.equal(policy.default_app_scopes.includes("feature:run"), false)
+  assert.ok(Object.hasOwn(policy.scopes, "feature:run"))
   assert.ok(policy.permission_suggestions["media:video"].scopes.includes("capture:media"))
   assert.ok(policy.permission_suggestions["web:social"].scopes.includes("memory:read_evidence"))
   assert.ok(policy.preset_suggestions.length >= 2)

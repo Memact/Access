@@ -76,9 +76,10 @@ as $$
   )
   select jsonb_build_object(
     'id', 'understanding_' || substr(encode(extensions.digest(array_to_string((select scopes from clean), '+') || '__' || array_to_string((select categories from clean), '+'), 'sha256'), 'hex'), 1, 12),
-    'product', 'permissioned_understanding',
-    'tagline', 'Understand what users are trying to do.',
-    'summary', 'Use approved activity categories to produce scoped context, not raw capture.',
+    'product', 'memact',
+    'tagline', 'Personalization made better',
+    'subtagline', 'with Memact',
+    'summary', 'Use permitted activity categories to build user-controlled context for apps and features.',
     'scopes', to_jsonb((select scopes from clean)),
     'categories', to_jsonb((select categories from clean)),
     'category_algorithms', coalesce((select jsonb_agg(algorithm) from category_rows), '[]'::jsonb),

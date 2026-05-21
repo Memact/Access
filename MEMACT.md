@@ -1,53 +1,29 @@
-# Memact description
+# Memact Access Notes
 
-**Permissioned intent infrastructure for apps.**
+Access is the API and gateway layer apps use to access Memact.
 
-```text
-Understand what users are trying to do.
-```
+It checks apps, API keys, consent, scopes, categories, feature access, capture
+event ingestion, and usage logs.
 
-Memact is infrastructure that helps apps predict user intent from approved digital activity, without giving them raw access to a user's private data.
-
-This repo is the Access layer. It controls app registration, API keys, consent, scopes, activity categories, verification, and revocation.
-
-## System position
+## System Position
 
 ```text
-Website manages -> Access gates -> Capture records -> Inference understands -> Schema groups -> Intent predicts -> Memory stores -> Apps consume
+Website manages -> Access checks -> Capture records -> Inference understands -> Schema organizes -> Memory stores -> Studio features run -> Apps and users use results
 ```
 
-Access decides whether an app is allowed to ask Memact for a scoped operation. It does not infer meaning, form schemas, predict intent, store memory, or expose raw private data.
+Access does not capture activity, infer meaning, form schemas, store memory, or
+run Studio features. It verifies whether a request is allowed and routes it.
 
-## What this repo owns
-
-- app registration and API keys
-- consent and `connection_id` verification
-- scopes, activity categories, revocation, and audit logs
-- permission policy compilation and routing
-- app-facing verification and gateway endpoints
-
-## What this repo does not own
-
-- capture recording
-- semantic understanding
-- schema grouping
-- intent prediction rules
-- memory storage or retrieval logic
-
-## Copy rules
+## Public Copy
 
 Use:
 
-- "Permissioned intent infrastructure for apps."
-- "Understand what users are trying to do."
-- "approved digital activity"
-- "consent and scope boundaries"
-- "API keys identify apps; connection IDs identify user consent"
+- "Memact helps apps personalize better with context users control."
+- "Apps send signals and use features through scoped API access."
+- "Users choose what each app can use."
 
 Avoid:
 
-- generic AI wrapper language
-- vague memory-plugin language
+- intent-first positioning
+- claims that Access is the meaning engine
 - raw-data export framing
-- claims that apps get the whole memory graph
-- open-source wording unless the repo license explicitly says so

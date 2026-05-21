@@ -4,8 +4,6 @@ import { fileURLToPath } from "node:url"
 import { loadLocalEnv } from "./env.mjs"
 import { JsonFileStore } from "./store.mjs"
 import { AccessError, AccessService } from "./service.mjs"
-import { buildPermissionedIntentResponse, predictPermissionedIntent } from "./intent-service.mjs"
-import { loadPredictIntent } from "./intent-engine.mjs"
 import { CATEGORY_DEFINITIONS, KNOWLEDGE_GRAPH_CONTRACT, SAFETY_RULES, SENSITIVE_CAPTURE_RULES } from "./policy.mjs"
 
 loadLocalEnv()
@@ -85,36 +83,41 @@ async function route(service, request, url, body) {
     )
   }
   if (request.method === "POST" && path === "/v1/intent/predict") {
-    if (usesSupabaseVerification()) {
-      const access = await verifySupabaseApiAccess(request, {
-        connection_id: body?.connection_id || "",
-        required_scopes: ["intent:predict", ...(Array.isArray(body?.required_scopes) ? body.required_scopes : [])],
-        activity_categories: body?.activity_categories || []
-      })
-      return buildPermissionedIntentResponse({
-        access,
-        activityCategories: body?.activity_categories || [],
-        activities: body?.activities || [],
-        predictIntent: await loadPredictIntent().catch((error) => {
-          throw new AccessError(503, "intent_engine_unavailable", process.env.NODE_ENV === "test" ? error?.message : "Intent prediction is temporarily unavailable.")
-        }),
-        now: body?.now
-      })
-    }
-    return predictPermissionedIntent({
-      service,
-      apiKey: readMemactApiKey(request),
-      connectionId: body?.connection_id || "",
-      requiredScopes: body?.required_scopes || [],
-      activityCategories: body?.activity_categories || [],
-      activities: body?.activities || [],
-      now: body?.now
+    throw new AccessError(410, "intent_core_removed", "Intent prediction has moved out of the core API.")
+  }
+  if (request.method === "POST" && path === "/v1/capture/events") {
+    return service.ingestCaptureEvent(readMemactApiKey(request), body, {
+      connectionId: request.headers["x-memact-connection-id"]
+    })
+  }
+  if (request.method === "GET" && path === "/v1/features") {
+    return service.listFeatures()
+  }
+  if (request.method === "POST" && path.startsWith("/v1/features/") && path.endsWith("/run")) {
+    const featureId = decodeURIComponent(path.slice("/v1/features/".length, -"/run".length))
+    return service.runFeature(readMemactApiKey(request), featureId, body)
+  }
+  if (request.method === "GET" && path === "/v1/schemas") {
+    return service.listSchemas(readMemactApiKey(request), {
+      connection_id: url.searchParams.get("connection_id") || request.headers["x-memact-connection-id"] || "",
+      activity_categories: parseList(url.searchParams.get("activity_categories") || url.searchParams.get("categories"))
+    })
+  }
+  if (request.method === "GET" && path === "/v1/memory") {
+    return service.listMemory(readMemactApiKey(request), {
+      connection_id: url.searchParams.get("connection_id") || request.headers["x-memact-connection-id"] || "",
+      activity_categories: parseList(url.searchParams.get("activity_categories") || url.searchParams.get("categories"))
     })
   }
 
   const auth = await service.authenticateSession(request.headers.authorization)
   if (request.method === "GET" && path === "/v1/me") {
     return { user: auth.user }
+  }
+  if (request.method === "GET" && path === "/v1/capture/events") {
+    return service.listCaptureEvents(auth.user.id, {
+      app_id: url.searchParams.get("app_id") || ""
+    })
   }
   if (request.method === "GET" && path === "/v1/apps") {
     return service.listApps(auth.user.id)

@@ -1,4 +1,29 @@
 export const SCOPE_DEFINITIONS = Object.freeze({
+  "capture:event_write": {
+    label: "Send capture events",
+    description: "Allow this app to send approved activity signals to Memact.",
+    grantsGraphRead: false
+  },
+  "feature:list": {
+    label: "List features",
+    description: "Allow this app to see available Memact features.",
+    grantsGraphRead: false
+  },
+  "feature:run": {
+    label: "Run features",
+    description: "Allow this app to run approved Memact features.",
+    grantsGraphRead: false
+  },
+  "context:read": {
+    label: "Read context",
+    description: "Allow this app to receive permitted user context.",
+    grantsGraphRead: false
+  },
+  "context:write": {
+    label: "Write context",
+    description: "Allow this app to add useful context for later personalization.",
+    grantsGraphRead: false
+  },
   "capture:webpage": {
     label: "Use webpage evidence",
     description: "Allow Memact to use approved webpage evidence to understand activity for this app.",
@@ -16,8 +41,13 @@ export const SCOPE_DEFINITIONS = Object.freeze({
     sensitive: true
   },
   "schema:write": {
-    label: "Create understanding schemas",
-    description: "Allow Memact to turn retained evidence into schema packets for understanding.",
+    label: "Create schema packets",
+    description: "Allow Memact to organize retained context into schema packets.",
+    grantsGraphRead: false
+  },
+  "schema:read": {
+    label: "Read schema summaries",
+    description: "Allow this app to read permitted schema packet summaries.",
     grantsGraphRead: false
   },
   "graph:write": {
@@ -47,20 +77,15 @@ export const SCOPE_DEFINITIONS = Object.freeze({
     grantsGraphRead: true,
     sensitive: true
   },
-  "intent:predict": {
-    label: "Predict intent",
-    description: "Allow the app to ask Memact for evidence-backed intent hypotheses from approved activity.",
-    grantsGraphRead: false,
-    sensitive: true
-  }
 })
 
 export const DEFAULT_APP_SCOPES = Object.freeze([
   "capture:webpage",
+  "capture:event_write",
   "schema:write",
-  "graph:write",
   "memory:write",
-  "memory:read_summary"
+  "memory:read_summary",
+  "feature:list"
 ])
 
 export const CATEGORY_DEFINITIONS = Object.freeze({
@@ -99,6 +124,26 @@ export const CATEGORY_DEFINITIONS = Object.freeze({
   "work:docs": {
     label: "Documents and notes",
     description: "Work documents, knowledge bases, notes, and writing tools."
+  },
+  "shopping": {
+    label: "Shopping",
+    description: "Product research, preferences, comparisons, and shopping signals."
+  },
+  "learning": {
+    label: "Learning",
+    description: "Study, tutorials, courses, notes, and learning sessions."
+  },
+  "productivity": {
+    label: "Productivity",
+    description: "Tasks, workflows, calendars, docs, and work sessions."
+  },
+  "attention": {
+    label: "Attention",
+    description: "Focus, interruptions, sustained work, and cognitive load signals."
+  },
+  "preferences": {
+    label: "Preferences",
+    description: "User choices, likes, dislikes, and personalization preferences."
   }
 })
 
@@ -107,14 +152,15 @@ export const DEFAULT_APP_CATEGORIES = Object.freeze([
   "web:research",
   "media:video",
   "ai:assistant",
-  "dev:code"
+  "dev:code",
+  "preferences"
 ])
 
 export const CATEGORY_ALGORITHMS = Object.freeze({
   "web:news": {
     label: "News article understanding",
     capture: ["article url", "publisher/domain", "headline", "author when public", "published/updated time", "section headings", "selected article text", "visible citations and links"],
-    understand: ["main claim", "supporting evidence", "named people and organizations", "topic trail", "stance or framing", "reading intent"],
+    understand: ["main claim", "supporting evidence", "named people and organizations", "topic trail", "stance or framing", "reading purpose"],
     schema: ["article", "claim", "source", "topic", "user_attention"],
     memory: ["topics followed repeatedly", "sources revisited", "claims compared across articles", "attention shifts between related stories"]
   },
@@ -126,9 +172,9 @@ export const CATEGORY_ALGORITHMS = Object.freeze({
     memory: ["concepts revisited", "sources trusted", "unresolved questions", "study trajectory"]
   },
   "web:commerce": {
-    label: "Shopping intent understanding",
+    label: "Shopping context understanding",
     capture: ["product url", "title", "brand", "price when visible", "review snippets", "comparison attributes", "availability"],
-    understand: ["purchase criteria", "tradeoffs", "preferred brands", "budget signals", "comparison intent"],
+    understand: ["purchase criteria", "tradeoffs", "preferred brands", "budget signals", "comparison purpose"],
     schema: ["product", "attribute", "preference", "comparison", "decision"],
     memory: ["stable preferences", "repeated product categories", "budget patterns", "decision blockers"]
   },
@@ -176,6 +222,14 @@ export const CATEGORY_ALGORITHMS = Object.freeze({
   }
 })
 
+const DEFAULT_CATEGORY_ALGORITHM = Object.freeze({
+  label: "Context understanding",
+  capture: ["event category", "source app", "timestamp", "visible label", "permitted metadata"],
+  understand: ["topic", "action", "preference", "purpose"],
+  schema: ["activity", "topic", "preference", "source"],
+  memory: ["stable preferences", "repeated topics", "useful context"]
+})
+
 export const PERMISSION_REGISTRY = Object.freeze(Object.fromEntries(
   Object.entries(SCOPE_DEFINITIONS).map(([scope, definition]) => {
     const canCapture = scope.startsWith("capture:")
@@ -193,7 +247,7 @@ export const PERMISSION_REGISTRY = Object.freeze(Object.fromEntries(
 
 export const ACTIVITY_CATEGORY_REGISTRY = Object.freeze(Object.fromEntries(
   Object.entries(CATEGORY_DEFINITIONS).map(([category, definition]) => {
-    const algorithm = CATEGORY_ALGORITHMS[category]
+    const algorithm = CATEGORY_ALGORITHMS[category] || DEFAULT_CATEGORY_ALGORITHM
     return [category, {
       ...definition,
       category,
@@ -211,7 +265,7 @@ export const STORAGE_PLAN = Object.freeze({
   default: {
     id: "local-first-memory",
     label: "Local-first memory",
-    description: "Capture packets and raw evidence stay local by default. Apps receive only verified understanding allowed by consent."
+    description: "Capture packets and sensitive evidence stay local by default. Apps receive only context allowed by consent."
   },
   future_user_cloud: {
     id: "user-owned-cloud-memory",
@@ -242,7 +296,7 @@ export function buildPermissionSuggestion(categories = [], appPurpose = "") {
   }
   return {
     id: createStrategyId(scopes, cleanCategories),
-    label: cleanCategories.includes("web:news") ? "Suggested for article understanding" : "Suggested permissions",
+    label: cleanCategories.includes("web:news") ? "Suggested for article context" : "Suggested permissions",
     description: "Selected by default from this app's activity categories. You can narrow or expand it before saving.",
     scopes: normalizeScopes(scopes),
     categories: cleanCategories
@@ -301,8 +355,9 @@ export function compilePolicy({ appId = "", scopes = [], categories = [], appPur
   return {
     id: createPolicyId(appId, cleanScopes, cleanCategories, appPurpose),
     app_id: appId,
-    product: "permissioned_understanding",
-    tagline: "Understand what users are trying to do.",
+    product: "memact",
+    tagline: "Personalization made better",
+    subtagline: "with Memact",
     purpose: String(appPurpose || "").trim().slice(0, 240),
     scopes: cleanScopes,
     categories: cleanCategories,
@@ -335,8 +390,9 @@ export function buildUnderstandingStrategy({ scopes = [], categories = [] } = {}
 
   return {
     id: createStrategyId(cleanScopes, cleanCategories),
-    product: "permissioned_understanding",
-    tagline: "Understand what users are trying to do.",
+    product: "memact",
+    tagline: "Personalization made better",
+    subtagline: "with Memact",
     summary: buildStrategySummary(cleanScopes, cleanCategories),
     scopes: cleanScopes,
     categories: cleanCategories,
@@ -474,7 +530,7 @@ function buildStrategySummary(scopes, categories) {
       : scopes.includes("memory:read_summary")
         ? "context summaries"
         : "write-only context updates"
-  return `Use ${categoryText} to produce ${delivery} without exposing raw capture beyond the approved scopes.`
+  return `Use ${categoryText} to produce ${delivery} inside the selected scopes.`
 }
 
 function buildCategoryPermissionMatrix() {
@@ -490,7 +546,7 @@ function buildCategoryPermissionMatrix() {
 
 function permissionStatusForCategory(scope, category) {
   if (scope === "memory:read_graph") return "risky"
-  if (scope === "intent:predict") return "recommended"
+  if (scope === "capture:event_write" || scope === "feature:list") return "recommended"
   if (scope === "capture:device" && !["dev:code", "ai:assistant", "work:docs"].includes(category)) return "risky"
   if (scope === "capture:media") return category.startsWith("media:") ? "recommended" : category === "web:social" ? "allowed" : "blocked"
   if (scope === "capture:webpage") return category.startsWith("web:") || ["ai:assistant", "dev:code", "work:docs"].includes(category) ? "recommended" : "allowed"
@@ -507,7 +563,6 @@ function permissionInputs(scope) {
   if (scope === "schema:write") return ["approved evidence packets", "content units", "candidate nodes and edges"]
   if (scope === "graph:write") return ["schema packets", "evidence links", "approved nodes and edges"]
   if (scope === "memory:write") return ["retained schema packets", "approved summaries", "evidence-backed context"]
-  if (scope === "intent:predict") return ["approved activity metadata", "approved evidence labels", "approved activity categories"]
   return ["compiled memory objects allowed by consent"]
 }
 
@@ -515,7 +570,6 @@ function permissionOutputs(scope) {
   if (scope === "memory:read_summary") return ["compact context summaries"]
   if (scope === "memory:read_evidence") return ["evidence cards", "source snippets", "reasoning support"]
   if (scope === "memory:read_graph") return ["permitted nodes", "permitted edges", "graph metadata"]
-  if (scope === "intent:predict") return ["evidence-backed intent hypotheses", "allowed actions", "blocked actions", "safety object"]
   if (scope.startsWith("capture:")) return ["local evidence signals"]
   if (scope === "schema:write") return ["schema packets"]
   if (scope === "graph:write") return ["context graph writes"]
@@ -528,7 +582,6 @@ function permissionStorageEffects(scope) {
   if (scope === "schema:write") return ["schema packets may be formed"]
   if (scope === "graph:write") return ["nodes, edges, and evidence links may be written"]
   if (scope === "memory:write") return ["approved context may be retained as memory"]
-  if (scope === "intent:predict") return ["read-only prediction; no raw capture storage by this permission alone"]
   return ["read-only delivery; no new storage by this permission alone"]
 }
 

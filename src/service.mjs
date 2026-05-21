@@ -381,6 +381,150 @@ export class AccessService {
     })
   }
 
+  async ingestCaptureEvent(apiKey, body = {}, options = {}) {
+    const category = String(body.category || body.activity_category || "").trim()
+    if (!category) {
+      throw new AccessError(400, "missing_category", "Capture event category is required.")
+    }
+    const eventType = String(body.event_type || body.type || "").trim()
+    if (!eventType) {
+      throw new AccessError(400, "missing_event_type", "Capture event type is required.")
+    }
+    const connectionId = body.connection_id || options.connectionId || ""
+    const access = await this.verifyApiAccess(apiKey, ["capture:event_write"], [category], connectionId)
+    return this.mutate(async (data) => {
+      const event = {
+        id: randomId("evt"),
+        schema_version: body.schema_version || "memact.capture_event.v0",
+        app_id: access.app.id,
+        user_id: access.user_id,
+        connection_id: access.connection_id,
+        event_type: eventType.slice(0, 120),
+        source_app: String(body.source_app || access.app.name || "app").slice(0, 120),
+        category,
+        payload: sanitizeCapturePayload(body.payload || {}),
+        evidence: body.evidence && typeof body.evidence === "object" ? body.evidence : {},
+        metadata: body.metadata && typeof body.metadata === "object" ? body.metadata : {},
+        occurred_at: normalizeTimestamp(body.occurred_at) || timestamp(this.now()),
+        created_at: timestamp(this.now())
+      }
+      data.capture_events.push(event)
+      recordUsageEvent(data, "capture.event.accept", {
+        app_id: access.app.id,
+        connection_id: access.connection_id,
+        category,
+        event_id: event.id
+      }, this.now)
+      audit(data, access.user_id, "capture.event.accept", { app_id: access.app.id, event_id: event.id, category })
+      return {
+        accepted: true,
+        event_id: event.id,
+        app_id: event.app_id,
+        connection_id: event.connection_id,
+        category: event.category,
+        created_at: event.created_at
+      }
+    })
+  }
+
+  async listCaptureEvents(userId, filter = {}) {
+    const data = await this.store.read()
+    assertUser(data, userId)
+    const ownedAppIds = new Set(data.apps.filter((app) => app.owner_user_id === userId).map((app) => app.id))
+    return {
+      events: data.capture_events
+        .filter((event) => ownedAppIds.has(event.app_id))
+        .filter((event) => !filter.app_id || event.app_id === filter.app_id)
+        .slice(-100)
+        .map((event) => ({
+          id: event.id,
+          app_id: event.app_id,
+          connection_id: event.connection_id,
+          event_type: event.event_type,
+          category: event.category,
+          occurred_at: event.occurred_at,
+          created_at: event.created_at
+        }))
+    }
+  }
+
+  async listFeatures() {
+    const data = await this.store.read()
+    const registry = data.feature_registry.length ? data.feature_registry : defaultFeatureRegistry()
+    return { features: registry }
+  }
+
+  async verifyFeatureAccess(apiKey, featureId, body = {}) {
+    const feature = defaultFeatureRegistry().find((item) => item.feature_id === featureId)
+    if (!feature) {
+      throw new AccessError(404, "feature_not_found", "Feature not found.")
+    }
+    const categories = Array.isArray(body.activity_categories) ? body.activity_categories : []
+    const access = await this.verifyApiAccess(apiKey, feature.required_scopes || ["feature:run"], categories, body.connection_id || "")
+    return { feature, access }
+  }
+
+  async runFeature(apiKey, featureId, body = {}) {
+    const { feature, access } = await this.verifyFeatureAccess(apiKey, featureId, body)
+    return this.mutate(async (data) => {
+      const run = {
+        id: randomId("frn"),
+        feature_id: feature.feature_id,
+        app_id: access.app.id,
+        user_id: access.user_id,
+        connection_id: access.connection_id,
+        status: "error",
+        error: {
+          code: "feature_runtime_unavailable",
+          message: "Feature runtime is not connected yet."
+        },
+        created_at: timestamp(this.now())
+      }
+      data.feature_runs.push(run)
+      recordUsageEvent(data, "feature.run.unavailable", { app_id: access.app.id, feature_id: feature.feature_id }, this.now)
+      return { status: "error", error: run.error }
+    })
+  }
+
+  async listSchemas(apiKey, options = {}) {
+    const access = await this.verifyApiAccess(apiKey, ["schema:read"], options.activity_categories || [], options.connection_id || "")
+    const data = await this.store.read()
+    return {
+      schemas: data.schema_packets
+        .filter((packet) => !packet.app_id || packet.app_id === access.app.id)
+        .map((packet) => ({
+          packet_id: packet.packet_id || packet.id,
+          category: packet.category,
+          schema_type: packet.schema_type,
+          confidence: packet.confidence,
+          created_at: packet.created_at
+        }))
+    }
+  }
+
+  async listMemory(apiKey, options = {}) {
+    const access = await this.verifyApiAccess(apiKey, ["memory:read_summary"], options.activity_categories || [], options.connection_id || "")
+    const data = await this.store.read()
+    return {
+      memory: data.memory_records
+        .filter((record) => !record.app_id || record.app_id === access.app.id)
+        .map((record) => ({
+          memory_id: record.memory_id || record.id,
+          memory_type: record.memory_type || record.type,
+          subject: record.subject || record.label,
+          confidence: record.confidence,
+          created_at: record.created_at
+        }))
+    }
+  }
+
+  async recordUsage(action, details = {}) {
+    return this.mutate(async (data) => {
+      const event = recordUsageEvent(data, action, details, this.now)
+      return { event }
+    })
+  }
+
   async getConnectApp(userId, { app_id, scopes = [], categories = [] }) {
     const cleanScopes = normalizeScopes(scopes)
     const cleanCategories = normalizeCategories(categories)
@@ -457,6 +601,61 @@ function createSession(data, userId, now) {
   }
   data.sessions.push(session)
   return { ...publicSession(session), token: rawToken }
+}
+
+function defaultFeatureRegistry() {
+  return [
+    {
+      feature_id: "user-context-wiki",
+      name: "User Context Wiki",
+      description: "Groups permitted context into a readable user-context wiki.",
+      required_scopes: ["feature:run", "memory:read_summary"],
+      required_schema_types: ["*"]
+    },
+    {
+      feature_id: "cognitive-load",
+      name: "Cognitive Load",
+      description: "Estimates app-context workload from permitted schema packets.",
+      required_scopes: ["feature:run", "schema:read"],
+      required_schema_types: ["attention", "productivity", "work"]
+    },
+    {
+      feature_id: "research-map",
+      name: "Research Map",
+      description: "Builds a map of research themes and source trails from permitted schemas.",
+      required_scopes: ["feature:run", "schema:read"],
+      required_schema_types: ["research", "learning"]
+    }
+  ]
+}
+
+function sanitizeCapturePayload(payload) {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) return {}
+  const blocked = /password|token|secret|otp|card|cvv|authorization|cookie/i
+  return Object.fromEntries(
+    Object.entries(payload)
+      .filter(([key]) => !blocked.test(key))
+      .map(([key, value]) => [String(key).slice(0, 80), typeof value === "string" ? value.slice(0, 2000) : value])
+  )
+}
+
+function normalizeTimestamp(value) {
+  const date = new Date(value)
+  return Number.isNaN(date.getTime()) ? "" : date.toISOString()
+}
+
+function recordUsageEvent(data, action, details = {}, now) {
+  const event = {
+    id: randomId("use"),
+    action,
+    details,
+    created_at: timestamp(now())
+  }
+  data.usage_events.push(event)
+  if (data.usage_events.length > 5000) {
+    data.usage_events.splice(0, data.usage_events.length - 5000)
+  }
+  return event
 }
 
 function audit(data, userId, action, details = {}) {

@@ -1028,7 +1028,12 @@ as $$
     'memory:read_summary',
     'memory:read_evidence',
     'memory:read_graph',
-    'intent:predict'
+    'capture:event_write',
+    'feature:list',
+    'feature:run',
+    'context:read',
+    'context:write',
+    'schema:read'
   ]::text[];
 $$;
 
@@ -1076,7 +1081,12 @@ as $$
       'memory:read_summary', jsonb_build_object('label', 'Read context summaries', 'description', 'Receive compact summaries of approved user context.', 'grantsGraphRead', false),
       'memory:read_evidence', jsonb_build_object('label', 'Read evidence cards', 'description', 'Receive approved evidence snippets that explain the context.', 'grantsGraphRead', false, 'sensitive', true),
       'memory:read_graph', jsonb_build_object('label', 'Read context graph', 'description', 'Receive permitted nodes and edges about approved user context.', 'grantsGraphRead', true, 'sensitive', true),
-      'intent:predict', jsonb_build_object('label', 'Predict intent', 'description', 'Ask Memact for evidence-backed intent hypotheses from approved activity.', 'grantsGraphRead', false, 'sensitive', true)
+      'capture:event_write', jsonb_build_object('label', 'Send app signals', 'description', 'Send app or site events to Memact after access is approved.', 'grantsGraphRead', false),
+      'feature:list', jsonb_build_object('label', 'List features', 'description', 'See which Memact features this app can request.', 'grantsGraphRead', false),
+      'feature:run', jsonb_build_object('label', 'Run features', 'description', 'Use approved Memact features with permitted context.', 'grantsGraphRead', false),
+      'context:read', jsonb_build_object('label', 'Read context', 'description', 'Receive permitted context returned by Memact features.', 'grantsGraphRead', false),
+      'context:write', jsonb_build_object('label', 'Write context', 'description', 'Contribute approved app context to Memact.', 'grantsGraphRead', false),
+      'schema:read', jsonb_build_object('label', 'Read schema packets', 'description', 'Use permitted schema packet summaries for features.', 'grantsGraphRead', false)
     ),
     'activity_categories', jsonb_build_object(
       'web:news', jsonb_build_object('label', 'News articles', 'description', 'News, politics, public affairs, and current-event pages.'),
@@ -1578,9 +1588,10 @@ as $$
   )
   select jsonb_build_object(
     'id', 'understanding_' || substr(encode(extensions.digest(array_to_string((select scopes from clean), '+') || '__' || array_to_string((select categories from clean), '+'), 'sha256'), 'hex'), 1, 12),
-    'product', 'permissioned_understanding',
-    'tagline', 'Understand what users are trying to do.',
-    'summary', 'Use approved activity categories to produce scoped context, not raw capture.',
+    'product', 'memact',
+    'tagline', 'Personalization made better',
+    'subtagline', 'with Memact',
+    'summary', 'Use permitted activity categories to build user-controlled context for apps and features.',
     'scopes', to_jsonb((select scopes from clean)),
     'categories', to_jsonb((select categories from clean)),
     'category_algorithms', coalesce((select jsonb_agg(algorithm) from category_rows), '[]'::jsonb),
@@ -1598,7 +1609,7 @@ as $$
       'summaries', 'memory:read_summary' = any((select scopes from clean)),
       'evidence_cards', 'memory:read_evidence' = any((select scopes from clean)),
       'graph_objects', 'memory:read_graph' = any((select scopes from clean)),
-      'intent_predictions', 'intent:predict' = any((select scopes from clean))
+      'feature_runs', 'feature:run' = any((select scopes from clean))
     ),
     'storage_plan', jsonb_build_object(
       'default', jsonb_build_object('id', 'local-first-memory', 'label', 'Local-first memory', 'description', 'Capture packets and raw evidence stay local by default. Apps receive only verified understanding allowed by consent.'),
@@ -1704,8 +1715,9 @@ as $$
   select jsonb_build_object(
     'id', 'policy_' || substr(encode(extensions.digest(coalesce(app_id_input::text, '') || '__' || array_to_string((select scopes from clean), '+') || '__' || array_to_string((select categories from clean), '+') || '__' || (select purpose from clean), 'sha256'), 'hex'), 1, 12),
     'app_id', app_id_input,
-    'product', 'permissioned_understanding',
-    'tagline', 'Understand what users are trying to do.',
+    'product', 'memact',
+    'tagline', 'Personalization made better',
+    'subtagline', 'with Memact',
     'purpose', (select purpose from clean),
     'scopes', to_jsonb((select scopes from clean)),
     'categories', to_jsonb((select categories from clean)),

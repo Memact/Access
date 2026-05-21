@@ -9,6 +9,12 @@ export function createEmptyStore() {
     apps: [],
     api_keys: [],
     consents: [],
+    capture_events: [],
+    feature_runs: [],
+    feature_registry: [],
+    schema_packets: [],
+    memory_records: [],
+    usage_events: [],
     audit_log: []
   }
 }
@@ -83,6 +89,12 @@ export function migrateStore(data) {
         compiled_policy: consent.compiled_policy || null
       }))
       : [],
+    capture_events: Array.isArray(base.capture_events) ? base.capture_events : [],
+    feature_runs: Array.isArray(base.feature_runs) ? base.feature_runs : [],
+    feature_registry: Array.isArray(base.feature_registry) ? base.feature_registry : [],
+    schema_packets: Array.isArray(base.schema_packets) ? base.schema_packets : [],
+    memory_records: Array.isArray(base.memory_records) ? base.memory_records : [],
+    usage_events: Array.isArray(base.usage_events) ? base.usage_events : [],
     audit_log: Array.isArray(base.audit_log) ? base.audit_log : []
   }
 }

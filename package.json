@@ -2,7 +2,7 @@
   "name": "memact-access",
   "private": true,
   "version": "0.0.0",
-  "description": "Memact permission layer for apps, consent, scopes, API keys, and intent-safe access.",
+  "description": "Memact access layer for apps, users, consent, API keys, capture events, feature access, and context-safe permissions.",
   "license": "SEE LICENSE IN LICENSE",
   "type": "module",
   "main": "./src/server.mjs",
