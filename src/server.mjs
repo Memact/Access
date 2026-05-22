@@ -98,9 +98,39 @@ async function route(service, request, url, body) {
     return service.runFeature(readMemactApiKey(request), featureId, body)
   }
   if (request.method === "GET" && path === "/v1/schemas") {
+    if (usesSupabaseVerification()) {
+      return listSupabaseSchemas(request, url)
+    }
     return service.listSchemas(readMemactApiKey(request), {
       connection_id: url.searchParams.get("connection_id") || request.headers["x-memact-connection-id"] || "",
       activity_categories: parseList(url.searchParams.get("activity_categories") || url.searchParams.get("categories"))
+    })
+  }
+  if (request.method === "POST" && path === "/v1/schemas") {
+    if (usesSupabaseVerification()) {
+      return upsertSupabaseSchema(request, body)
+    }
+    return service.createSchemaDefinition(readMemactApiKey(request), body, {
+      connectionId: request.headers["x-memact-connection-id"]
+    })
+  }
+  if (request.method === "GET" && path.startsWith("/v1/schemas/") && !path.endsWith("/subschemas")) {
+    const schemaId = decodeURIComponent(path.slice("/v1/schemas/".length))
+    if (usesSupabaseVerification()) {
+      return getSupabaseSchema(request, url, schemaId)
+    }
+    return service.getSchemaDefinition(readMemactApiKey(request), schemaId, {
+      connection_id: url.searchParams.get("connection_id") || request.headers["x-memact-connection-id"] || "",
+      activity_categories: parseList(url.searchParams.get("activity_categories") || url.searchParams.get("categories"))
+    })
+  }
+  if (request.method === "POST" && path.startsWith("/v1/schemas/") && path.endsWith("/subschemas")) {
+    const schemaId = decodeURIComponent(path.slice("/v1/schemas/".length, -"/subschemas".length))
+    if (usesSupabaseVerification()) {
+      return upsertSupabaseSubschema(request, schemaId, body)
+    }
+    return service.addSubSchemaDefinition(readMemactApiKey(request), schemaId, body, {
+      connectionId: request.headers["x-memact-connection-id"]
     })
   }
   if (request.method === "GET" && path === "/v1/memory") {
@@ -181,6 +211,49 @@ function readMemactApiKey(request) {
 }
 
 async function verifySupabaseApiAccess(request, body = {}) {
+  return callSupabaseRpc(request, "memact_verify_api_key", {
+    required_scopes_input: body?.required_scopes || [],
+    activity_categories_input: body?.activity_categories || [],
+    consent_id_input: body?.connection_id || null
+  })
+}
+
+async function listSupabaseSchemas(request, url) {
+  return callSupabaseRpc(request, "memact_list_schema_definitions", {
+    consent_id_input: url.searchParams.get("connection_id") || request.headers["x-memact-connection-id"] || null,
+    activity_categories_input: parseList(url.searchParams.get("activity_categories") || url.searchParams.get("categories"))
+  })
+}
+
+async function getSupabaseSchema(request, url, schemaId) {
+  return callSupabaseRpc(request, "memact_get_schema_definition", {
+    consent_id_input: url.searchParams.get("connection_id") || request.headers["x-memact-connection-id"] || null,
+    schema_id_input: schemaId,
+    activity_categories_input: parseList(url.searchParams.get("activity_categories") || url.searchParams.get("categories"))
+  })
+}
+
+async function upsertSupabaseSchema(request, body = {}) {
+  return callSupabaseRpc(request, "memact_upsert_schema_definition", {
+    consent_id_input: body?.connection_id || request.headers["x-memact-connection-id"] || null,
+    schema_id_input: body?.schema_id || body?.id || "",
+    category_input: body?.category || "general",
+    description_input: body?.description || "",
+    metadata_input: body?.metadata || {}
+  })
+}
+
+async function upsertSupabaseSubschema(request, schemaId, body = {}) {
+  return callSupabaseRpc(request, "memact_upsert_subschema_definition", {
+    consent_id_input: body?.connection_id || request.headers["x-memact-connection-id"] || null,
+    schema_id_input: schemaId,
+    sub_schema_id_input: body?.sub_schema_id || body?.subschema_id || body?.id || "",
+    description_input: body?.description || "",
+    metadata_input: body?.metadata || {}
+  })
+}
+
+async function callSupabaseRpc(request, functionName, args = {}) {
   const supabaseUrl = String(process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || "").replace(/\/+$/, "")
   const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ""
   const apiKey = readMemactApiKey(request)
@@ -192,7 +265,7 @@ async function verifySupabaseApiAccess(request, body = {}) {
     throw new AccessError(401, "missing_api_key", "Memact API key is required.")
   }
 
-  const response = await fetch(`${supabaseUrl}/rest/v1/rpc/memact_verify_api_key`, {
+  const response = await fetch(`${supabaseUrl}/rest/v1/rpc/${functionName}`, {
     method: "POST",
     headers: {
       apikey: supabaseAnonKey,
@@ -201,9 +274,7 @@ async function verifySupabaseApiAccess(request, body = {}) {
     },
     body: JSON.stringify({
       api_key_input: apiKey,
-      required_scopes_input: body?.required_scopes || [],
-      activity_categories_input: body?.activity_categories || [],
-      consent_id_input: body?.connection_id || null
+      ...args
     })
   })
 
@@ -253,7 +324,7 @@ function send(response, status, payload, request) {
     response.setHeader("Access-Control-Allow-Origin", origin)
     response.setHeader("Vary", "Origin")
   }
-  response.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Memact-API-Key")
+  response.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Memact-API-Key, X-Memact-Connection-Id")
   response.setHeader("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS")
   response.setHeader("X-Content-Type-Options", "nosniff")
   response.setHeader("Referrer-Policy", "no-referrer")

@@ -77,6 +77,11 @@ export const SCOPE_DEFINITIONS = Object.freeze({
     grantsGraphRead: true,
     sensitive: true
   },
+  "schema:register": {
+    label: "Register schemas",
+    description: "Allow this app to register schema definitions and subschemas.",
+    grantsGraphRead: false
+  },
 })
 
 export const DEFAULT_APP_SCOPES = Object.freeze([
@@ -144,6 +149,18 @@ export const CATEGORY_DEFINITIONS = Object.freeze({
   "preferences": {
     label: "Preferences",
     description: "User choices, likes, dislikes, and personalization preferences."
+  },
+  "reading": {
+    label: "Reading",
+    description: "Article reading behavior such as opens, scroll depth, finish rate, skips, and summary use."
+  },
+  "news": {
+    label: "News",
+    description: "News articles and current-event reading signals."
+  },
+  "article": {
+    label: "Articles",
+    description: "Article pages, excerpts, topics, sources, and reading events."
   }
 })
 
@@ -219,6 +236,27 @@ export const CATEGORY_ALGORITHMS = Object.freeze({
     understand: ["document purpose", "open decisions", "stakeholders", "summary", "follow-up tasks"],
     schema: ["document", "decision", "stakeholder", "task", "summary"],
     memory: ["ongoing projects", "writing preferences", "recurring stakeholders", "open decisions"]
+  },
+  "reading": {
+    label: "Reading preference understanding",
+    capture: ["article title", "topic", "source", "read time", "scroll depth", "finish event", "summary expand or collapse"],
+    understand: ["topic interest", "skipped topics", "reading length preference", "summary style preference", "engagement pattern"],
+    schema: ["reading_preferences", "preferred_topics", "skipped_topics", "summary_style_preference"],
+    memory: ["reading preference memory", "repeat topics", "summary style preference", "article length preference"]
+  },
+  "news": {
+    label: "News reading understanding",
+    capture: ["headline", "topic", "publisher", "read time", "scroll depth", "finish event"],
+    understand: ["topic interest", "source revisits", "drop-off pattern", "overview preference"],
+    schema: ["reading_preferences", "source_trail", "topic_interest"],
+    memory: ["news topics revisited", "preferred overview style", "sources revisited"]
+  },
+  "article": {
+    label: "Article reading understanding",
+    capture: ["article title", "excerpt", "topic", "source", "reading events"],
+    understand: ["summary preference", "article length preference", "topic interest"],
+    schema: ["reading_preferences", "summary_style_preference", "article_length_preference"],
+    memory: ["article overview preference", "preferred topics", "skipped topics"]
   }
 })
 
@@ -547,6 +585,7 @@ function buildCategoryPermissionMatrix() {
 function permissionStatusForCategory(scope, category) {
   if (scope === "memory:read_graph") return "risky"
   if (scope === "capture:event_write" || scope === "feature:list") return "recommended"
+  if (scope === "schema:register") return ["reading", "news", "article", "web:news", "web:research"].includes(category) ? "allowed" : "risky"
   if (scope === "capture:device" && !["dev:code", "ai:assistant", "work:docs"].includes(category)) return "risky"
   if (scope === "capture:media") return category.startsWith("media:") ? "recommended" : category === "web:social" ? "allowed" : "blocked"
   if (scope === "capture:webpage") return category.startsWith("web:") || ["ai:assistant", "dev:code", "work:docs"].includes(category) ? "recommended" : "allowed"

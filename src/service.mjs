@@ -1,4 +1,5 @@
 import { hashPassword, hashSecret, randomId, randomToken, verifyPassword } from "./crypto.mjs"
+import fs from "node:fs"
 import path from "node:path"
 import {
   CATEGORY_DEFINITIONS,
@@ -37,7 +38,7 @@ export class AccessService {
     this.store = store
     this.now = now
     this.verifyExternalSession = options.verifyExternalSession || verifySupabaseAccessToken
-    this.studioPath = options.studioPath || process.env.MEMACT_STUDIO_PATH || path.resolve(process.cwd(), "..", "studio")
+    this.studioPath = options.studioPath || process.env.MEMACT_STUDIO_PATH || defaultStudioPath()
   }
 
   async signup({ email, password }) {
@@ -501,6 +502,12 @@ export class AccessService {
     const access = await this.verifyApiAccess(apiKey, ["schema:read"], options.activity_categories || [], options.connection_id || "")
     const data = await this.store.read()
     return {
+      schema_definitions: data.schema_definitions
+        .filter((schema) => !schema.app_id || schema.app_id === access.app.id)
+        .map((schema) => ({
+          ...schema,
+          subschemas: data.subschema_definitions.filter((subschema) => subschema.schema_id === schema.schema_id && (!subschema.app_id || subschema.app_id === access.app.id))
+        })),
       schemas: data.schema_packets
         .filter((packet) => !packet.app_id || packet.app_id === access.app.id)
         .map((packet) => ({
@@ -510,6 +517,64 @@ export class AccessService {
           confidence: packet.confidence,
           created_at: packet.created_at
         }))
+    }
+  }
+
+  async createSchemaDefinition(apiKey, body = {}, options = {}) {
+    const access = await this.verifyApiAccess(apiKey, ["schema:write"], body.category ? [body.category] : [], options.connectionId || body.connection_id || "")
+    const schemaId = normalizeSchemaId(body.schema_id || body.id)
+    if (!schemaId) throw new AccessError(400, "missing_schema_id", "Schema id is required.")
+    const schema = {
+      schema_id: schemaId,
+      app_id: access.app.id,
+      category: String(body.category || "general").trim().slice(0, 80),
+      description: String(body.description || "").trim().slice(0, 500),
+      created_at: timestamp(this.now()),
+      updated_at: timestamp(this.now())
+    }
+    return this.mutate(async (data) => {
+      data.schema_definitions = data.schema_definitions.filter((item) => !(item.app_id === access.app.id && item.schema_id === schema.schema_id))
+      data.schema_definitions.push(schema)
+      recordUsageEvent(data, "schema.definition.upsert", { app_id: access.app.id, schema_id: schema.schema_id }, this.now)
+      return { schema }
+    })
+  }
+
+  async addSubSchemaDefinition(apiKey, schemaId, body = {}, options = {}) {
+    const access = await this.verifyApiAccess(apiKey, ["schema:write"], [], options.connectionId || body.connection_id || "")
+    const cleanSchemaId = normalizeSchemaId(schemaId)
+    const subSchemaId = normalizeSchemaId(body.sub_schema_id || body.subschema_id || body.id)
+    if (!cleanSchemaId) throw new AccessError(400, "missing_schema_id", "Schema id is required.")
+    if (!subSchemaId) throw new AccessError(400, "missing_subschema_id", "Subschema id is required.")
+    const subSchema = {
+      schema_id: cleanSchemaId,
+      sub_schema_id: subSchemaId,
+      app_id: access.app.id,
+      description: String(body.description || "").trim().slice(0, 500),
+      created_at: timestamp(this.now()),
+      updated_at: timestamp(this.now())
+    }
+    return this.mutate(async (data) => {
+      const schemaExists = data.schema_definitions.some((schema) => schema.app_id === access.app.id && schema.schema_id === cleanSchemaId)
+      if (!schemaExists) throw new AccessError(404, "schema_not_found", "Schema definition not found.")
+      data.subschema_definitions = data.subschema_definitions.filter((item) => !(item.app_id === access.app.id && item.schema_id === cleanSchemaId && item.sub_schema_id === subSchemaId))
+      data.subschema_definitions.push(subSchema)
+      recordUsageEvent(data, "schema.subschema.upsert", { app_id: access.app.id, schema_id: cleanSchemaId, sub_schema_id: subSchemaId }, this.now)
+      return { subschema: subSchema }
+    })
+  }
+
+  async getSchemaDefinition(apiKey, schemaId, options = {}) {
+    const access = await this.verifyApiAccess(apiKey, ["schema:read"], options.activity_categories || [], options.connection_id || "")
+    const cleanSchemaId = normalizeSchemaId(schemaId)
+    const data = await this.store.read()
+    const schema = data.schema_definitions.find((item) => item.schema_id === cleanSchemaId && (!item.app_id || item.app_id === access.app.id))
+    if (!schema) throw new AccessError(404, "schema_not_found", "Schema definition not found.")
+    return {
+      schema: {
+        ...schema,
+        subschemas: data.subschema_definitions.filter((item) => item.schema_id === cleanSchemaId && (!item.app_id || item.app_id === access.app.id))
+      }
     }
   }
 
@@ -614,8 +679,23 @@ function createSession(data, userId, now) {
   return { ...publicSession(session), token: rawToken }
 }
 
+function defaultStudioPath() {
+  const candidates = [
+    path.resolve(process.cwd(), "..", "Studio"),
+    path.resolve(process.cwd(), "..", "studio")
+  ]
+  return candidates.find((candidate) => fs.existsSync(path.join(candidate, "src", "index.mjs"))) || candidates[0]
+}
+
 function defaultFeatureRegistry() {
   return [
+    {
+      feature_id: "adaptive-article-overview",
+      name: "Adaptive Article Overview",
+      description: "Creates article overviews based on the article and the user's approved reading memory.",
+      required_scopes: ["feature:run", "memory:read_summary", "schema:read"],
+      required_schema_types: ["reading_preferences"]
+    },
     {
       feature_id: "user-context-wiki",
       name: "Memory Wiki",
@@ -675,6 +755,15 @@ function sanitizeCapturePayload(payload) {
 function normalizeTimestamp(value) {
   const date = new Date(value)
   return Number.isNaN(date.getTime()) ? "" : date.toISOString()
+}
+
+function normalizeSchemaId(value) {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9:_-]+/g, "_")
+    .replace(/^_+|_+$/g, "")
+    .slice(0, 120)
 }
 
 function recordUsageEvent(data, action, details = {}, now) {
