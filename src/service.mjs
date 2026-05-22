@@ -38,7 +38,7 @@ export class AccessService {
     this.store = store
     this.now = now
     this.verifyExternalSession = options.verifyExternalSession || verifySupabaseAccessToken
-    this.studioPath = options.studioPath || process.env.MEMACT_STUDIO_PATH || defaultStudioPath()
+    this.playgroundPath = options.playgroundPath || options.studioPath || process.env.MEMACT_PLAYGROUND_PATH || process.env.MEMACT_STUDIO_PATH || defaultPlaygroundPath()
   }
 
   async signup({ email, password }) {
@@ -534,7 +534,7 @@ export class AccessService {
     const { feature, access } = await this.verifyFeatureAccess(apiKey, featureId, body)
     const runInput = body.input && typeof body.input === "object" ? body.input : body
     return this.mutate(async (data) => {
-      const runtime = await runStudioFeature(this.studioPath, feature.feature_id, runInput, {
+      const runtime = await runPlaygroundFeature(this.playgroundPath, feature.feature_id, runInput, {
         app: {
           id: access.app.id,
           name: access.app.name
@@ -742,9 +742,10 @@ function createSession(data, userId, now) {
   return { ...publicSession(session), token: rawToken }
 }
 
-function defaultStudioPath() {
+function defaultPlaygroundPath() {
   const candidates = [
-    path.resolve(process.cwd(), "..", "Studio"),
+    path.resolve(process.cwd(), "..", "playground"),
+    path.resolve(process.cwd(), "..", "Playground"),
     path.resolve(process.cwd(), "..", "studio")
   ]
   return candidates.find((candidate) => fs.existsSync(path.join(candidate, "src", "index.mjs"))) || candidates[0]
@@ -783,10 +784,10 @@ function defaultFeatureRegistry() {
   ]
 }
 
-async function runStudioFeature(studioPath, featureId, input, context) {
+async function runPlaygroundFeature(playgroundPath, featureId, input, context) {
   try {
-    const runtime = await import(pathToFileUrl(path.join(studioPath, "src", "index.mjs")))
-    const feature = await runtime.loadFeature(path.join(studioPath, "features", featureId))
+    const runtime = await import(pathToFileUrl(path.join(playgroundPath, "src", "index.mjs")))
+    const feature = await runtime.loadFeature(path.join(playgroundPath, "features", featureId))
     return await runtime.runFeature(feature, input, context)
   } catch (error) {
     return {

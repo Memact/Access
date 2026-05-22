@@ -15,7 +15,7 @@ Access returns a clear error instead of pretending it produced a feature result.
 
 For the playground flow, apps send permitted signals to Access. Access gates the
 request, Capture records the activity, Schema and Memory prepare useful memory,
-and Studio features can return personalization help back to the app.
+and Playground features can return personalization help back to the app.
 
 ## What This Repo Owns
 
@@ -34,7 +34,7 @@ and Studio features can return personalization help back to the app.
 - Semantic inference.
 - Schema packet formation.
 - Durable memory ranking.
-- Studio feature implementations.
+- Playground feature implementations.
 - Archived Intent routes as a core product path.
 
 ## Product Flow
@@ -45,7 +45,7 @@ Access checks
 -> Inference understands
 -> Schema organizes
 -> Memory stores
--> Studio features run
+-> Playground features run
 -> Apps and users use results
 ```
 
@@ -105,8 +105,8 @@ The default feature registry includes:
 - `cognitive-load`
 - `research-map`
 
-When Studio is available through `MEMACT_STUDIO_PATH` or a sibling `studio`
-folder, Access loads the feature and runs it. If Studio is not connected,
+When Playground is available through `MEMACT_PLAYGROUND_PATH` or a sibling `playground`
+folder, Access loads the feature and runs it. `MEMACT_STUDIO_PATH` still works as a compatibility fallback. If Playground is not connected,
 feature runs fail clearly with `feature_runtime_unavailable` instead of
 inventing output.
 
@@ -121,13 +121,13 @@ The backend is currently real in these places:
 - Sensitive payload fields are stripped before storage.
 - Feature registry is returned through `GET /v1/features`.
 - Feature runs require `feature:run`.
-- Studio features run locally when the Studio runtime is available.
+- Playground features run locally when the Playground runtime is available.
 - Schema and memory summary routes require their read scopes.
 - The old intent route is not silently used as core API.
 
 The backend is intentionally not pretending in these places:
 
-- Studio feature execution is not faked if the runtime is unavailable.
+- Playground feature execution is not faked if the runtime is unavailable.
 - Capture, Inference, Schema, and Memory stay separate repos instead of being
   copy-pasted into Access.
 - Supabase remains an auth/storage integration path, not the product identity.

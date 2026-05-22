@@ -49,9 +49,9 @@ test("feature registry is listed and feature run requires feature scope", async 
   )
 })
 
-test("adaptive article overview runs through Studio runtime", async () => {
+test("adaptive article overview runs through Playground runtime", async () => {
   const { service, key, consent } = await setupAccess(["feature:run", "memory:read_summary", "schema:read"], {
-    studioPath: path.resolve(process.cwd(), "..", "Studio"),
+    playgroundPath: path.resolve(process.cwd(), "..", "playground"),
     categories: ["reading"]
   })
   const result = await service.runFeature(key.key, "adaptive-article-overview", {
@@ -128,9 +128,9 @@ test("schema helper routes store schema and subschemas", async () => {
   assert.equal(found.schema.subschemas.length, 1)
 })
 
-test("feature run uses Studio runtime when available", async () => {
+test("feature run uses Playground runtime when available", async () => {
   const { service, key, consent } = await setupAccess(["feature:run", "memory:read_summary"], {
-    studioPath: path.resolve(process.cwd(), "..", "studio")
+    playgroundPath: path.resolve(process.cwd(), "..", "playground")
   })
   const result = await service.runFeature(key.key, "user-context-wiki", {
     connection_id: consent.consent.id,

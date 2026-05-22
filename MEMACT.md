@@ -8,12 +8,12 @@ event ingestion, and usage logs.
 ## System Position
 
 ```text
-Website manages -> Access checks -> Capture records -> Inference understands -> Schema organizes -> Memory stores -> Studio features run -> Apps and users use results
+Website manages -> Access checks -> Capture records -> Inference understands -> Schema organizes -> Memory stores -> Playground features run -> Apps and users use results
 ```
 
 Access does not capture activity, infer meaning, form schemas, or store memory.
-It verifies whether a request is allowed, routes it, and can run Studio features
-when the Studio runtime is connected.
+It verifies whether a request is allowed, routes it, and can run Playground features
+when the Playground runtime is connected.
 
 ## Public Copy
 
