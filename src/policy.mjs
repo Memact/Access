@@ -156,6 +156,14 @@ export const CATEGORY_DEFINITIONS = Object.freeze({
     label: "Preferences",
     description: "User choices, likes, dislikes, and personalization preferences."
   },
+  "fitness": {
+    label: "Fitness",
+    description: "Fitness goals, activity level, body metrics, hydration targets, and nutrition preferences."
+  },
+  "dietary_preferences": {
+    label: "Dietary preferences",
+    description: "Diet choices, allergies, restrictions, and nutrition preferences the user chooses to share."
+  },
   "reading": {
     label: "Reading",
     description: "Article reading behavior such as opens, scroll depth, finish rate, skips, and summary use."

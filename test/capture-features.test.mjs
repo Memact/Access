@@ -204,6 +204,32 @@ test("schema and memory summary routes require their scopes", async () => {
   assert.deepEqual(memory.memory, [])
 })
 
+test("wiki proposals require context write and stay pending for user control", async () => {
+  const { service, key, consent } = await setupAccess(["context:write"], { categories: ["preferences"] })
+  const result = await service.proposeWikiContext(key.key, {
+    connection_id: consent.consent.id,
+    proposal: {
+      source_app: "NutriPlan Lite",
+      category: "preferences",
+      title: "Fitness setup preferences",
+      context: {
+        fitness_goal: "maintenance",
+        api_key: "should not persist"
+      },
+      confidence: 0.8
+    }
+  })
+
+  assert.equal(result.accepted, true)
+  assert.equal(result.proposal.status, "pending")
+  assert.equal(result.proposal.visibility, "private")
+  assert.equal(result.proposal.context.fitness_goal, "maintenance")
+  assert.equal(Object.hasOwn(result.proposal.context, "api_key"), false)
+
+  const data = await service.store.read()
+  assert.equal(data.wiki_proposals.length, 1)
+})
+
 async function setupAccess(scopes, options = {}) {
   const service = new AccessService(new MemoryStore(), () => new Date(), options)
   const developer = await service.signup({ email: `dev-${Math.random()}@example.com`, password: "long password" })

@@ -662,6 +662,43 @@ export class AccessService {
     }
   }
 
+  async proposeWikiContext(apiKey, body = {}, options = {}) {
+    const proposalInput = body.proposal && typeof body.proposal === "object" ? body.proposal : body
+    const category = String(proposalInput.category || body.category || "").trim()
+    const connectionId = body.connection_id || proposalInput.connection_id || options.connectionId || ""
+    if (!category) throw new AccessError(400, "missing_category", "Wiki proposal category is required.")
+    const access = await this.verifyApiAccess(apiKey, ["context:write"], [category], connectionId)
+    const now = timestamp(this.now())
+    const proposal = {
+      entry_id: randomId("wkp"),
+      schema_version: "memact.app_context_proposal.v0",
+      app_id: access.app.id,
+      connection_id: access.connection_id,
+      user_id: access.user_id,
+      source_app: String(proposalInput.source_app || access.app.name || "Connected app").trim().slice(0, 120),
+      source_type: normalizeProposalSourceType(proposalInput.source_type),
+      category,
+      title: String(proposalInput.title || proposalInput.context?.title || `${category} context`).trim().slice(0, 160),
+      context: sanitizeProposalContext(proposalInput.context || proposalInput.value || {}),
+      value: sanitizeProposalContext(proposalInput.value || proposalInput.context || {}),
+      status: "pending",
+      visibility: "private",
+      user_visible: proposalInput.user_visible !== false,
+      confidence: normalizeConfidence(proposalInput.confidence),
+      proposed_at: proposalInput.proposed_at || now,
+      created_at: now,
+      updated_at: now,
+      source_trail: Array.isArray(proposalInput.source_trail) ? proposalInput.source_trail.slice(0, 20) : [],
+      competing_interpretations: Array.isArray(proposalInput.competing_interpretations) ? proposalInput.competing_interpretations.slice(0, 10) : [],
+      contradictions: Array.isArray(proposalInput.contradictions) ? proposalInput.contradictions.slice(0, 10) : []
+    }
+    return this.mutate(async (data) => {
+      data.wiki_proposals.push(proposal)
+      recordUsageEvent(data, "wiki.proposal.create", { app_id: access.app.id, category }, this.now)
+      return { accepted: true, proposal }
+    })
+  }
+
   async recordUsage(action, details = {}) {
     return this.mutate(async (data) => {
       const event = recordUsageEvent(data, action, details, this.now)
@@ -1093,6 +1130,32 @@ function publicFeatureConnection(connection) {
     created_at: connection.created_at,
     disconnected_at: connection.disconnected_at
   }
+}
+
+function normalizeProposalSourceType(value) {
+  return ["app", "memact", "playground_feature", "user"].includes(value) ? value : "app"
+}
+
+function normalizeConfidence(value) {
+  const number = Number(value)
+  if (!Number.isFinite(number)) return null
+  return Math.max(0, Math.min(1, number))
+}
+
+function sanitizeProposalContext(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {}
+  return Object.fromEntries(
+    Object.entries(value)
+      .filter(([key]) => !/password|secret|token|api[_-]?key|credential/i.test(key))
+      .map(([key, item]) => [String(key).slice(0, 80), sanitizeProposalValue(item)])
+  )
+}
+
+function sanitizeProposalValue(value) {
+  if (value === null || value === undefined) return value
+  if (Array.isArray(value)) return value.slice(0, 50).map(sanitizeProposalValue)
+  if (typeof value === "object") return sanitizeProposalContext(value)
+  return String(value).slice(0, 1000)
 }
 
 function timestamp(date) {
