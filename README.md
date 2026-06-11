@@ -2,26 +2,20 @@
 
 Access checks who can do what.
 
-It handles apps, users, consent, API keys, scopes, categories, memory
-suggestions, allowed memory reads, and audit/usage records.
+It handles apps, users, consent, API keys, scopes, activity categories, feature
+access, capture ingestion checks, and audit/usage records.
 
-Access is the backend front door for Memact. It is not the Context engine, the
-Wiki UI, or the durable Memory store.
+Access is the backend front door for Memact. It is not the capture engine,
+meaning engine, context engine, feature runtime, or memory store.
 
-## Product Flow
+In this repo, "works" means Access can verify an app, accept permitted capture
+events, list available features, enforce feature scopes, and return permitted
+context/memory summaries from its store. If a deeper runtime is not connected,
+Access returns a clear error instead of pretending it produced a feature result.
 
-```text
-App suggests memory or sends specific app details
--> Access checks permission
--> Context gives the app input a safe shape
--> Yourself shows it to the user
--> User accepts, edits, rejects, or deletes
--> Memory stores what survives
--> SDK lets apps read only allowed memory
-```
-
-Apps should not start from zero, and they should not invent identity from weak
-activity. Activity is not identity.
+For the playground flow, apps send permitted signals to Access. Access gates the
+request, Context and Memory prepare useful memory,
+and Playground features can return personalization help back to the app.
 
 ## What This Repo Owns
 
@@ -29,18 +23,32 @@ activity. Activity is not identity.
 - API key hashing, verification, and revocation.
 - User consent and connection ids.
 - Scope and category policy.
-- Memory suggestion checks.
-- Allowed memory summary checks.
-- App credit events.
+- Capture-event ingestion checks.
+- Feature access checks.
+- Context and memory summary access checks.
 - Audit and usage records.
 
 ## What This Repo Does Not Own
 
-- User-facing Wiki/Yourself screens.
-- Context category algorithms.
+- Browser extension capture logic.
+- Semantic inference.
+- Context proposal formation.
 - Durable memory ranking.
-- Full user Wiki access for apps.
-- Archived Intent, Capture, Inference, or Playground product paths.
+- Playground feature implementations.
+- Archived Intent routes as a core product path.
+
+## Product Flow
+
+```text
+Access checks
+-> Context organizes
+-> Memory stores
+-> Playground features run
+-> Apps and users use results
+```
+
+Website manages Access records. Apps call Access before sending signals or
+using Memact features.
 
 ## Routes
 
@@ -48,35 +56,25 @@ activity. Activity is not identity.
 GET  /health
 GET  /v1/policy
 POST /v1/access/verify
-POST /v1/memory/suggestions
-POST /v1/memory/proposals
-POST /v1/wiki/proposals
-GET  /v1/memory
-GET  /v1/context
-GET  /v1/credits
-POST /v1/cap/requests
-GET  /v1/cap/requests/:id
-POST /v1/cap/packets
-POST /v1/cap/proposals
-```
-
-Compatibility routes still exist for older integrations:
-
-```text
 POST /v1/capture/events
+GET  /v1/capture/events
 GET  /v1/features
 POST /v1/features/:featureId/run
-GET  /v1/schemas
+GET  /v1/context
+GET  /v1/memory
+GET  /v1/credits
 ```
+
+`/v1/schemas` still works as a compatibility alias for older SDKs and PRs.
 
 `POST /v1/intent/predict` is no longer a core route and returns `410`.
 
-## Memory Suggestions
+## Capture Events
 
-Apps can suggest memory after consent:
+Apps send capture events from their backend after permission:
 
 ```http
-POST /v1/memory/suggestions
+POST /v1/capture/events
 Authorization: Bearer mka_your_private_key
 Content-Type: application/json
 ```
@@ -84,79 +82,74 @@ Content-Type: application/json
 ```json
 {
   "connection_id": "connection_id_from_consent",
-  "proposal": {
-    "category": "fitness",
-    "title": "Prefers strength workouts",
-    "context": {
-      "preference": "strength workouts"
-    },
-    "evidence": {
-      "reason": "The user completed strength plans in this app."
-    }
+  "event_type": "article_read",
+  "category": "web:research",
+  "payload": {
+    "title": "Integration guide",
+    "url": "https://example.com/docs"
   }
 }
 ```
 
-Access verifies the key, connection, scopes, and category before creating a
-pending Wiki proposal. The user still decides whether it becomes accepted
-memory.
+Access verifies the key, consent, scopes, and category before accepting the
+event.
 
-## CAP
+Accepted events are stored in the Access store today so the gateway can be
+tested end to end. Capture remains the repo that owns capture normalization,
+privacy skips, extension capture, and future capture storage adapters.
 
-CAP is the Context Access Protocol. It is how apps request specific approved
-memory without browsing a user's whole Yourself page.
+## Context proposals and credits
 
-Example:
+Apps can send either:
 
-```json
-{
-  "connection_id": "connection_id_from_consent",
-  "purpose": "onboarding_prefill",
-  "requested_categories": ["fitness"],
-  "requested_context": [
-    { "description": "workout goal", "field_hint": "fitness.goal", "required": true },
-    { "description": "dietary preference", "field_hint": "diet.preference", "required": false }
-  ]
-}
-```
+- raw signals, such as a music replay, workout completion, or saved product
+- context proposals, such as "prefers strength workouts", backed by evidence
 
-The response packet has `allowed_context` and `missing_context`. Missing fields
-mean the app should ask the user normally. CAP never returns full profiles, raw
-activity events, or unapproved memory.
+Access checks the app key, connection, scopes, and categories before creating a
+pending Wiki proposal. Raw signals earn a smaller app credit bonus because
+Memact still needs to shape them. Context proposals with evidence earn a larger
+bonus. Reading allowed context spends credits.
 
-See [`docs/cap.md`](./docs/cap.md).
+Credits are simple developer-side accounting, not a user-facing billing system.
+Users mainly see the Wiki: what apps know, what they propose, and what the user
+can accept, edit, reject, or delete.
 
-## Credits
+## Features
 
-Credits are simple developer-side accounting.
+The default feature registry includes:
 
-- Specific app activity earns a smaller credit bonus because Memact still has
-  to shape it before the user reviews it.
-- A clear memory suggestion with evidence earns more.
-- Reading allowed memory spends credits.
+- `user-context-wiki` / Memory Wiki
+- media/articles category support
+- community/bot category support
+- `cognitive-load`
+- `research-map`
 
-Users mainly see the human product: what apps know, what apps suggest, and what
-they can change.
+When Playground is available through `MEMACT_PLAYGROUND_PATH` or a sibling `playground`
+folder, Access loads the feature and runs it. If Playground is not connected,
+feature runs fail clearly with `feature_runtime_unavailable` instead of
+inventing output.
 
 ## Backend Reality Check
 
-The backend is real in these places:
+The backend is currently real in these places:
 
 - API keys are hashed and checked.
 - Consent and `connection_id` are checked before app access.
-- Scopes and categories are enforced.
-- Apps can create pending memory suggestions.
-- Sensitive fields are stripped before storage.
-- Allowed memory summaries require read scopes.
-- CAP packets return only approved field fragments and missing fields.
-- Credit events are recorded.
+- Scopes and activity categories are enforced.
+- Capture events can be accepted through `POST /v1/capture/events`.
+- Sensitive payload fields are stripped before storage.
+- Feature registry is returned through `GET /v1/features`.
+- Feature runs require `feature:run`.
+- Playground features run locally when the Playground runtime is available.
+- Context and memory summary routes require their read scopes.
 - The old intent route is not silently used as core API.
 
 The backend is intentionally not pretending in these places:
 
-- Apps do not get the full user Wiki.
-- Context and Memory stay separate repos instead of being copied into Access.
-- Older feature routes stay compatibility-only until a new product path replaces them.
+- Playground feature execution is not faked if the runtime is unavailable.
+- Context and Memory stay separate repos instead of being
+  copy-pasted into Access.
+- Supabase remains an auth/storage integration path, not the product identity.
 
 ## Development
 

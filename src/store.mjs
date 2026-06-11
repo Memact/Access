@@ -18,8 +18,6 @@ export function createEmptyStore() {
     wiki_proposals: [],
     schema_packets: [],
     memory_records: [],
-    cap_requests: [],
-    cap_packets: [],
     credit_events: [],
     usage_events: [],
     audit_log: []
@@ -105,8 +103,6 @@ export function migrateStore(data) {
     wiki_proposals: Array.isArray(base.wiki_proposals) ? base.wiki_proposals : [],
     schema_packets: Array.isArray(base.schema_packets) ? base.schema_packets : [],
     memory_records: Array.isArray(base.memory_records) ? base.memory_records : [],
-    cap_requests: Array.isArray(base.cap_requests) ? base.cap_requests : [],
-    cap_packets: Array.isArray(base.cap_packets) ? base.cap_packets : [],
     credit_events: Array.isArray(base.credit_events) ? base.credit_events : [],
     usage_events: Array.isArray(base.usage_events) ? base.usage_events : [],
     audit_log: Array.isArray(base.audit_log) ? base.audit_log : []
