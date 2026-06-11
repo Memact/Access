@@ -144,9 +144,30 @@ async function route(service, request, url, body) {
   if (request.method === "GET" && path === "/v1/credits") {
     return service.listCredits(readMemactApiKey(request))
   }
-  if (request.method === "POST" && path === "/v1/wiki/proposals") {
+  if (request.method === "POST" && (path === "/v1/wiki/proposals" || path === "/v1/memory/suggestions" || path === "/v1/memory/proposals")) {
     return service.proposeWikiContext(readMemactApiKey(request), body, {
       connectionId: request.headers["x-memact-connection-id"]
+    })
+  }
+  if (request.method === "POST" && path === "/v1/cap/requests") {
+    return service.createCapRequest(readMemactApiKey(request), body, {
+      connectionId: request.headers["x-memact-connection-id"]
+    })
+  }
+  if (request.method === "POST" && path === "/v1/cap/packets") {
+    return service.createCapPacket(readMemactApiKey(request), body, {
+      connectionId: request.headers["x-memact-connection-id"]
+    })
+  }
+  if (request.method === "POST" && path === "/v1/cap/proposals") {
+    return service.proposeCapContext(readMemactApiKey(request), body, {
+      connectionId: request.headers["x-memact-connection-id"]
+    })
+  }
+  if (request.method === "GET" && path.startsWith("/v1/cap/requests/")) {
+    const requestId = decodeURIComponent(path.slice("/v1/cap/requests/".length))
+    return service.getCapRequest(readMemactApiKey(request), requestId, {
+      connection_id: url.searchParams.get("connection_id") || request.headers["x-memact-connection-id"] || ""
     })
   }
 
@@ -164,6 +185,9 @@ async function route(service, request, url, body) {
   }
   if (request.method === "POST" && path === "/v1/apps") {
     return service.registerApp(auth.user.id, body)
+  }
+  if (request.method === "POST" && path.startsWith("/v1/apps/")) {
+    return service.updateApp(auth.user.id, decodeURIComponent(path.slice("/v1/apps/".length)), body)
   }
   if (request.method === "DELETE" && path.startsWith("/v1/apps/")) {
     return service.deleteApp(auth.user.id, decodeURIComponent(path.slice("/v1/apps/".length)))

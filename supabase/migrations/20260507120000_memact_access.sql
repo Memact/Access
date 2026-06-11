@@ -180,19 +180,19 @@ as $$
         'grantsGraphRead', false
       ),
       'memory:read_summary', jsonb_build_object(
-        'label', 'Read context summaries',
-        'description', 'Allow the app to receive compact summaries of approved user context.',
+        'label', 'Read memory summaries',
+        'description', 'Allow the app to receive compact summaries of approved user memory.',
         'grantsGraphRead', false
       ),
       'memory:read_evidence', jsonb_build_object(
         'label', 'Read evidence cards',
-        'description', 'Allow the app to receive approved evidence snippets that explain the context.',
+        'description', 'Allow the app to receive approved evidence snippets that explain the memory.',
         'grantsGraphRead', false,
         'sensitive', true
       ),
       'memory:read_graph', jsonb_build_object(
-        'label', 'Read context graph',
-        'description', 'Allow the app to receive permitted nodes and edges about approved user context.',
+        'label', 'Read memory graph',
+        'description', 'Allow the app to receive permitted nodes and edges about approved user memory.',
         'grantsGraphRead', true,
         'sensitive', true
       )
