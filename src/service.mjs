@@ -173,6 +173,66 @@ export class AccessService {
     })
   }
 
+  async updateApp(userId, appId, { name, description, redirect_urls, developer_url, categories }) {
+    return this.mutate(async (data) => {
+      assertUser(data, userId)
+      const app = data.apps.find((item) => item.id === appId && item.owner_user_id === userId && !item.revoked_at)
+      if (!app) {
+        throw new AccessError(404, "app_not_found", "App not found.")
+      }
+
+      if (name !== undefined) {
+        const cleanName = String(name || "").trim()
+        if (cleanName.length < 2) {
+          throw new AccessError(400, "invalid_app_name", "App name must be at least 2 characters.")
+        }
+        const slug = normalizeAppName(cleanName)
+        if (!slug) {
+          throw new AccessError(400, "invalid_app_name", "App name needs letters or numbers.")
+        }
+        const duplicate = data.apps.some((other) => (
+          other.id !== appId &&
+          other.owner_user_id === userId &&
+          !other.revoked_at &&
+          normalizeAppName(other.slug || other.name) === slug
+        ))
+        if (duplicate) {
+          throw new AccessError(409, "duplicate_app_name", "You already have an app with this name.")
+        }
+        app.name = cleanName.slice(0, 80)
+        app.slug = slug
+      }
+
+      if (description !== undefined) {
+        app.description = String(description || "").trim().slice(0, 240)
+      }
+
+      if (developer_url !== undefined) {
+        app.developer_url = normalizeOptionalUrl(developer_url)
+      }
+
+      if (redirect_urls !== undefined) {
+        app.redirect_urls = Array.isArray(redirect_urls) ? redirect_urls.map(String).slice(0, 10) : []
+      }
+
+      if (categories !== undefined) {
+        const cleanCategories = assertCategories(categories)
+        app.default_categories = cleanCategories
+      }
+
+      app.compiled_policy = compilePolicy({
+        appId: app.id,
+        scopes: [],
+        categories: app.default_categories || [],
+        appPurpose: app.description || app.name
+      })
+
+      app.updated_at = timestamp(this.now())
+      audit(data, userId, "app.update", { app_id: app.id })
+      return { app: publicApp(app) }
+    })
+  }
+
   async listApps(userId) {
     const data = await this.store.read()
     assertUser(data, userId)
@@ -677,7 +737,7 @@ export class AccessService {
     const proposalInput = normalizeContextSubmission(body)
     const category = String(proposalInput.category || body.category || "").trim()
     const connectionId = body.connection_id || proposalInput.connection_id || options.connectionId || ""
-    if (!category) throw new AccessError(400, "missing_category", "Wiki proposal category is required.")
+    if (!category) throw new AccessError(400, "missing_category", "Memory suggestion category is required.")
     const access = await this.verifyApiAccess(apiKey, ["context:write"], [category], connectionId)
     const now = timestamp(this.now())
     const sourceTrail = normalizeSourceTrail(proposalInput)
@@ -713,6 +773,110 @@ export class AccessService {
       recordUsageEvent(data, "wiki.proposal.create", { app_id: access.app.id, category }, this.now)
       const credit_event = recordCreditEvent(data, creditForProposal(access.app.id, access.connection_id, proposal), this.now)
       return { accepted: true, proposal, credits: creditSummary(data, access.app.id), credit_event }
+    })
+  }
+
+  async createCapRequest(apiKey, body = {}, options = {}) {
+    const requestedContext = normalizeRequestedContext(body.requested_context)
+    if (!requestedContext.length) throw new AccessError(400, "missing_requested_context", "CAP request needs at least one requested context item.")
+    const connectionId = body.connection_id || options.connectionId || ""
+    const requestedCategories = normalizeCategories(body.requested_categories || body.activity_categories || [])
+    const requiredScopes = normalizeScopes(["cap:request", ...(body.requested_scopes || [])])
+    const access = await this.verifyApiAccess(apiKey, requiredScopes, requestedCategories, connectionId)
+    const now = timestamp(this.now())
+    const capRequest = {
+      schema_version: "memact.cap_request.v0",
+      request_id: randomId("cap_req"),
+      app_id: access.app.id,
+      connection_id: access.connection_id,
+      user_id: access.user_id,
+      purpose: String(body.purpose || "onboarding_prefill").trim().slice(0, 120),
+      requested_context: requestedContext,
+      requested_categories: requestedCategories,
+      requested_scopes: requiredScopes,
+      created_at: now
+    }
+    return this.mutate(async (data) => {
+      data.cap_requests.push(capRequest)
+      recordUsageEvent(data, "cap.request.create", { app_id: access.app.id, request_id: capRequest.request_id }, this.now)
+      return { request: capRequest }
+    })
+  }
+
+  async getCapRequest(apiKey, requestId, options = {}) {
+    const access = await this.verifyApiAccess(apiKey, ["cap:request"], [], options.connection_id || "")
+    const data = await this.store.read()
+    const request = data.cap_requests.find((item) => item.request_id === requestId && item.app_id === access.app.id)
+    if (!request) throw new AccessError(404, "cap_request_not_found", "CAP request not found.")
+    return { request }
+  }
+
+  async createCapPacket(apiKey, body = {}, options = {}) {
+    const requestInput = body.cap_request || body.request || null
+    const requestId = String(body.request_id || requestInput?.request_id || "").trim()
+    const connectionId = body.connection_id || requestInput?.connection_id || options.connectionId || ""
+    const requestedCategories = normalizeCategories(requestInput?.requested_categories || body.requested_categories || body.activity_categories || [])
+    const access = await this.verifyApiAccess(apiKey, ["cap:read_packet"], requestedCategories, connectionId)
+    return this.mutate(async (data) => {
+      const storedRequest = requestId
+        ? data.cap_requests.find((item) => item.request_id === requestId && item.app_id === access.app.id)
+        : null
+      const capRequest = normalizeCapRequestForPacket(requestInput || storedRequest, access, requestedCategories)
+      const approvedMemory = filterCapMemory(data.memory_records, capRequest, access, {
+        allowedSensitiveFieldPaths: body.allowed_sensitive_field_paths || []
+      })
+      const packet = buildCapPacketFromMemory(capRequest, approvedMemory)
+      data.cap_packets.push(packet)
+      recordUsageEvent(data, "cap.packet.create", { app_id: access.app.id, packet_id: packet.packet_id }, this.now)
+      const credit_event = recordCreditEvent(data, {
+        app_id: access.app.id,
+        connection_id: access.connection_id,
+        amount: -1,
+        reason: "cap_packet_read",
+        detail: "App read a small approved context packet"
+      }, this.now)
+      return { packet, credits: creditSummary(data, access.app.id), credit_event }
+    })
+  }
+
+  async proposeCapContext(apiKey, body = {}, options = {}) {
+    const proposal = body.proposal && typeof body.proposal === "object" ? body.proposal : body
+    const category = String(proposal.category || "").trim()
+    const connectionId = body.connection_id || proposal.connection_id || options.connectionId || ""
+    if (!category) throw new AccessError(400, "missing_category", "Context proposal category is required.")
+    const access = await this.verifyApiAccess(apiKey, ["context:propose"], [category], connectionId)
+    const now = timestamp(this.now())
+    const shaped = {
+      schema_version: "memact.context_proposal.v1",
+      proposal_id: randomId("ctx_prop"),
+      app_id: access.app.id,
+      connection_id: access.connection_id,
+      user_id: access.user_id,
+      source_type: normalizeProposalSourceType(proposal.source_type),
+      category,
+      field_path: String(proposal.field_path || "").trim().slice(0, 180),
+      proposed_value: sanitizeProposalValue(proposal.proposed_value ?? proposal.value ?? proposal.context ?? {}),
+      evidence_summary: String(proposal.evidence_summary || proposal.evidence?.reason || "").trim().slice(0, 500),
+      confidence: normalizeConfidence(proposal.confidence ?? 0.55),
+      status: "pending",
+      sensitivity: String(proposal.sensitivity || "normal").trim().toLowerCase().slice(0, 80),
+      visibility: normalizeVisibility(proposal.visibility),
+      created_at: now,
+      updated_at: now
+    }
+    if (!shaped.field_path) throw new AccessError(400, "missing_field_path", "Context proposal field_path is required.")
+    return this.mutate(async (data) => {
+      data.wiki_proposals.push({
+        ...shaped,
+        entry_id: shaped.proposal_id,
+        title: proposal.title || shaped.field_path,
+        value: { [shaped.field_path]: shaped.proposed_value },
+        context: { [shaped.field_path]: shaped.proposed_value },
+        user_visible: true,
+        source_trail: normalizeSourceTrail(proposal)
+      })
+      recordUsageEvent(data, "cap.proposal.create", { app_id: access.app.id, category, field_path: shaped.field_path }, this.now)
+      return { accepted: true, proposal: shaped }
     })
   }
 
@@ -813,6 +977,9 @@ function createSession(data, userId, now) {
 
 function defaultPlaygroundPath() {
   const candidates = [
+    path.resolve(process.cwd(), "playground"),
+    path.resolve(process.cwd(), "Playground"),
+    path.resolve(process.cwd(), "studio"),
     path.resolve(process.cwd(), "..", "playground"),
     path.resolve(process.cwd(), "..", "Playground"),
     path.resolve(process.cwd(), "..", "studio")
@@ -1178,6 +1345,151 @@ function normalizeContextSubmission(body = {}) {
   }
 }
 
+function normalizeRequestedContext(items = []) {
+  return (Array.isArray(items) ? items : [])
+    .map((item) => {
+      if (typeof item === "string") {
+        return { description: item.trim().slice(0, 180), required: false }
+      }
+      return {
+        description: String(item?.description || item?.field_hint || "").trim().slice(0, 180),
+        field_hint: item?.field_hint ? String(item.field_hint).trim().slice(0, 180) : undefined,
+        category_hint: item?.category_hint ? String(item.category_hint).trim().slice(0, 80) : undefined,
+        required: Boolean(item?.required)
+      }
+    })
+    .filter((item) => item.description)
+}
+
+function normalizeCapRequestForPacket(input, access, requestedCategories = []) {
+  const request = input && typeof input === "object" ? input : {}
+  const requestedContext = normalizeRequestedContext(request.requested_context)
+  if (!requestedContext.length) throw new AccessError(400, "missing_requested_context", "CAP packet needs requested_context or a stored CAP request.")
+  return {
+    schema_version: "memact.cap_request.v0",
+    request_id: request.request_id || randomId("cap_req"),
+    app_id: access.app.id,
+    connection_id: access.connection_id,
+    user_id: access.user_id,
+    purpose: String(request.purpose || "onboarding_prefill").trim().slice(0, 120),
+    requested_context: requestedContext,
+    requested_categories: normalizeCategories(request.requested_categories || requestedCategories),
+    requested_scopes: normalizeScopes(request.requested_scopes || ["cap:request"]),
+    created_at: request.created_at || new Date().toISOString()
+  }
+}
+
+function filterCapMemory(records = [], capRequest = {}, access = {}, options = {}) {
+  const allowedSensitive = new Set(options.allowedSensitiveFieldPaths || [])
+  const categorySet = new Set(normalizeCategories(capRequest.requested_categories || []))
+  return (Array.isArray(records) ? records : [])
+    .map(normalizeCapMemoryRecord)
+    .filter((record) => record.field_path)
+    .filter((record) => ["accepted", "approved", "active", "edited", "user_verified"].includes(record.status))
+    .filter((record) => !record.revoked_at && !record.deleted_at)
+    .filter((record) => !categorySet.size || categorySet.has(record.category))
+    .filter((record) => !record.connection_id || record.connection_id === access.connection_id)
+    .filter((record) => !record.user_id || record.user_id === access.user_id)
+    .filter((record) => !record.allowed_app_ids.length || record.allowed_app_ids.includes(access.app.id))
+    .filter((record) => record.sensitivity !== "sensitive" || allowedSensitive.has(record.field_path))
+    .filter((record) => !isForbiddenCapRecord(record))
+}
+
+function buildCapPacketFromMemory(capRequest, memoryRecords = []) {
+  const allowedByField = new Map()
+  const missing_context = []
+  for (const item of capRequest.requested_context) {
+    const match = bestCapMemoryMatch(item, memoryRecords)
+    if (!match) {
+      missing_context.push({
+        description: item.description,
+        field_hint: item.field_hint,
+        category_hint: item.category_hint,
+        required: Boolean(item.required),
+        reason: "No approved matching memory."
+      })
+      continue
+    }
+    if (!allowedByField.has(match.record.field_path)) {
+      allowedByField.set(match.record.field_path, match)
+    }
+  }
+  return {
+    schema_version: "memact.cap_packet.v0",
+    packet_id: randomId("cap_pkt"),
+    request_id: capRequest.request_id,
+    app_id: capRequest.app_id,
+    connection_id: capRequest.connection_id,
+    purpose: capRequest.purpose,
+    allowed_context: [...allowedByField.values()].map(({ record, score }) => ({
+      field_path: record.field_path,
+      value: record.value,
+      category: record.category,
+      sensitivity: record.sensitivity,
+      source: record.source,
+      confidence: record.confidence ?? score
+    })),
+    missing_context,
+    forbidden_context: ["full_profile", "raw_capture_events", "unapproved_memory"],
+    retention: "none",
+    requires_user_review: missing_context.some((item) => item.required),
+    created_at: new Date().toISOString()
+  }
+}
+
+function normalizeCapMemoryRecord(record = {}) {
+  const context = record.context && typeof record.context === "object" ? record.context : {}
+  const fieldPath = String(record.field_path || record.path || record.memory_field || context.field_path || "").trim().slice(0, 180)
+  return {
+    ...record,
+    field_path: fieldPath,
+    value: record.value ?? context.value ?? record.subject ?? record.label ?? record.summary ?? "",
+    category: String(record.category || context.category || record.memory_category || "general").trim().slice(0, 80),
+    status: String(record.status || record.state || "accepted").trim().toLowerCase(),
+    sensitivity: String(record.sensitivity || context.sensitivity || "normal").trim().toLowerCase(),
+    source: String(record.source || record.source_app_id || record.provenance?.app_id || "approved_memory").trim().slice(0, 120),
+    source_app_id: String(record.source_app_id || record.provenance?.app_id || "").trim(),
+    allowed_app_ids: Array.isArray(record.allowed_app_ids) ? record.allowed_app_ids : [],
+    allowed_actor_types: Array.isArray(record.allowed_actor_types) ? record.allowed_actor_types : ["memact_worker"],
+    confidence: record.confidence === undefined ? undefined : normalizeConfidence(record.confidence),
+    source_trail: Array.isArray(record.source_trail) ? record.source_trail : []
+  }
+}
+
+function bestCapMemoryMatch(requested = {}, records = []) {
+  const requestTokens = capTokens([requested.description, requested.field_hint, requested.category_hint].filter(Boolean).join(" "))
+  let best = null
+  for (const record of records) {
+    const score = capMatchScore(requestTokens, requested, record)
+    if (score <= 0) continue
+    if (!best || score > best.score) best = { record, score }
+  }
+  return best && best.score >= 0.12 ? best : null
+}
+
+function capMatchScore(requestTokens, requested, record) {
+  const candidateTokens = capTokens([record.field_path, record.category, record.subject, record.label, record.value].join(" "))
+  let overlap = 0
+  for (const token of requestTokens) {
+    if (candidateTokens.has(token)) overlap += 1
+  }
+  const lexical = requestTokens.size ? overlap / requestTokens.size : 0
+  const fieldHint = String(requested.field_hint || "").trim().toLowerCase()
+  const fieldBoost = fieldHint && record.field_path.toLowerCase() === fieldHint ? 1 : 0
+  const categoryBoost = requested.category_hint && record.category.toLowerCase() === String(requested.category_hint).toLowerCase() ? 0.2 : 0
+  return Number(Math.max(lexical, fieldBoost, categoryBoost).toFixed(3))
+}
+
+function capTokens(value) {
+  const stop = new Set(["a", "an", "and", "app", "can", "for", "from", "of", "the", "to", "user", "with"])
+  return new Set(String(value || "").toLowerCase().replace(/[^a-z0-9.]+/g, " ").split(/\s+/).filter((token) => token.length >= 3 && !stop.has(token)))
+}
+
+function isForbiddenCapRecord(record) {
+  const text = `${record.field_path} ${record.source} ${record.memory_type || ""} ${record.type || ""}`.toLowerCase()
+  return /full[_-]?profile|raw[_-]?capture|raw[_-]?events?|unapproved[_-]?memory/.test(text)
+}
+
 function contextFromRawSignal(signal = {}) {
   const payload = sanitizeProposalContext(signal.payload || signal.evidence || signal.context || {})
   const eventType = String(signal.event_type || signal.type || "activity").trim().slice(0, 80)
@@ -1249,6 +1561,11 @@ function creditSummary(data, appId) {
 
 function normalizeProposalSourceType(value) {
   return ["app", "memact", "playground_feature", "user"].includes(value) ? value : "app"
+}
+
+function normalizeVisibility(value) {
+  const clean = String(value || "").trim().toLowerCase()
+  return ["private", "shareable", "public"].includes(clean) ? clean : "private"
 }
 
 function normalizeConfidence(value) {

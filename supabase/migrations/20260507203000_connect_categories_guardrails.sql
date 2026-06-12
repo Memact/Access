@@ -100,9 +100,9 @@ as $$
       'schema:write', jsonb_build_object('label', 'Create understanding schemas', 'description', 'Turn retained evidence into schema packets for understanding.', 'grantsGraphRead', false),
       'graph:write', jsonb_build_object('label', 'Write context graph', 'description', 'Store nodes, edges, and evidence packets that describe user context for this app.', 'grantsGraphRead', false),
       'memory:write', jsonb_build_object('label', 'Write memory', 'description', 'Retain approved context as memory.', 'grantsGraphRead', false),
-      'memory:read_summary', jsonb_build_object('label', 'Read context summaries', 'description', 'Receive compact summaries of approved user context.', 'grantsGraphRead', false),
-      'memory:read_evidence', jsonb_build_object('label', 'Read evidence cards', 'description', 'Receive approved evidence snippets that explain the context.', 'grantsGraphRead', false, 'sensitive', true),
-      'memory:read_graph', jsonb_build_object('label', 'Read context graph', 'description', 'Receive permitted nodes and edges about approved user context.', 'grantsGraphRead', true, 'sensitive', true)
+      'memory:read_summary', jsonb_build_object('label', 'Read memory summaries', 'description', 'Receive compact summaries of approved user memory.', 'grantsGraphRead', false),
+      'memory:read_evidence', jsonb_build_object('label', 'Read evidence cards', 'description', 'Receive approved evidence snippets that explain the memory.', 'grantsGraphRead', false, 'sensitive', true),
+      'memory:read_graph', jsonb_build_object('label', 'Read memory graph', 'description', 'Receive permitted nodes and edges about approved user memory.', 'grantsGraphRead', true, 'sensitive', true)
     ),
     'activity_categories', jsonb_build_object(
       'web:news', jsonb_build_object('label', 'News articles', 'description', 'News, politics, public affairs, and current-event pages.'),

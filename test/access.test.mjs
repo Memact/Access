@@ -100,7 +100,7 @@ test("API access is limited by activity categories", async () => {
   assert.deepEqual(allowed.categories, ["web:news"])
   assert.equal(Object.hasOwn(key.api_key, "categories"), false)
   assert.equal(allowed.understanding_strategy.product, "memact")
-  assert.equal(allowed.understanding_strategy.tagline, "Personalization made better")
+  assert.equal(allowed.understanding_strategy.tagline, "Your Identity. Your Choice.")
   assert.equal(allowed.compiled_policy.product, "memact")
   assert.equal(allowed.compiled_policy.strategy.id, allowed.understanding_strategy.id)
   assert.ok(allowed.understanding_strategy.capture_plan.allowed_inputs.includes("headline"))
@@ -149,11 +149,11 @@ test("policy suggests selected default permissions from activity categories", as
   const service = new AccessService(new MemoryStore())
   const policy = await service.policy()
 
-  assert.ok(policy.permission_suggestion.scopes.includes("capture:webpage"))
-  assert.ok(policy.permission_suggestion.scopes.includes("capture:event_write"))
+  assert.ok(policy.permission_suggestion.scopes.includes("context:write"))
+  assert.ok(policy.permission_suggestion.scopes.includes("context:read"))
   assert.equal(policy.default_app_scopes.includes("feature:run"), false)
   assert.ok(Object.hasOwn(policy.scopes, "feature:run"))
-  assert.ok(policy.permission_suggestions["media:video"].scopes.includes("capture:media"))
+  assert.ok(policy.permission_suggestions["media:video"].scopes.includes("context:write"))
   assert.ok(policy.permission_suggestions["web:social"].scopes.includes("memory:read_evidence"))
   assert.ok(policy.preset_suggestions.length >= 2)
 })
@@ -204,4 +204,30 @@ test("deleting an app hides it and revokes related keys and permissions", async 
   await service.registerApp(signup.user.id, { name: "delete-me" })
   const recreated = await service.listApps(signup.user.id)
   assert.equal(recreated.apps.length, 1)
+})
+
+test("updating an app updates details and checks unique slugs", async () => {
+  const service = new AccessService(new MemoryStore())
+  const signup = await service.signup({ email: "update@example.com", password: "long password" })
+
+  const firstApp = await service.registerApp(signup.user.id, { name: "First App", description: "First description" })
+  const secondApp = await service.registerApp(signup.user.id, { name: "Second App", description: "Second description" })
+
+  const updatedFirst = await service.updateApp(signup.user.id, firstApp.app.id, {
+    description: "New description",
+    developer_url: "https://new-url.example.com",
+    categories: ["fitness"]
+  })
+  assert.equal(updatedFirst.app.description, "New description")
+  assert.equal(updatedFirst.app.developer_url, "https://new-url.example.com/")
+  assert.deepEqual(updatedFirst.app.default_categories, ["fitness"])
+
+  await assert.rejects(
+    () => service.updateApp(signup.user.id, firstApp.app.id, { name: "Second App" }),
+    /already have an app/
+  )
+
+  const updatedName = await service.updateApp(signup.user.id, firstApp.app.id, { name: "First App Revised" })
+  assert.equal(updatedName.app.name, "First App Revised")
+  assert.equal(updatedName.app.slug, "first-app-revised")
 })

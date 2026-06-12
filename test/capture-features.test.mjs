@@ -1,6 +1,7 @@
 import test from "node:test"
 import assert from "node:assert/strict"
 import path from "node:path"
+import fs from "node:fs"
 import { AccessService } from "../src/service.mjs"
 import { MemoryStore } from "../src/store.mjs"
 
@@ -53,8 +54,11 @@ test("feature registry is listed and feature run requires feature scope", async 
 })
 
 test("adaptive article overview runs through Playground runtime", async () => {
+  const playgroundPath = fs.existsSync(path.resolve(process.cwd(), "playground"))
+    ? path.resolve(process.cwd(), "playground")
+    : path.resolve(process.cwd(), "..", "playground")
   const { service, key, consent } = await setupAccess(["feature:run", "memory:read_summary", "schema:read"], {
-    playgroundPath: path.resolve(process.cwd(), "..", "playground"),
+    playgroundPath,
     categories: ["reading"]
   })
   const result = await service.runFeature(key.key, "adaptive-article-overview", {
@@ -170,8 +174,11 @@ test("schema helper routes store schema and subschemas", async () => {
 })
 
 test("feature run uses Playground runtime when available", async () => {
+  const playgroundPath = fs.existsSync(path.resolve(process.cwd(), "playground"))
+    ? path.resolve(process.cwd(), "playground")
+    : path.resolve(process.cwd(), "..", "playground")
   const { service, key, consent } = await setupAccess(["feature:run", "memory:read_summary"], {
-    playgroundPath: path.resolve(process.cwd(), "..", "playground")
+    playgroundPath
   })
   const result = await service.runFeature(key.key, "user-context-wiki", {
     connection_id: consent.consent.id,
@@ -274,6 +281,100 @@ test("raw signals become pending context proposals with smaller credit bonus", a
   const credits = await service.listCredits(key.key)
   assert.equal(credits.app_id, app.app.id)
   assert.equal(credits.balance, 4)
+})
+
+test("CAP request and packet return only approved matching context", async () => {
+  const { service, key, consent, app, user } = await setupAccess(["cap:request", "cap:read_packet", "context:propose"], { categories: ["fitness"] })
+  await service.mutate(async (data) => {
+    data.memory_records.push(
+      {
+        id: "mem_diet_pref",
+        field_path: "diet.preference",
+        value: "vegetarian",
+        category: "fitness",
+        status: "approved",
+        sensitivity: "normal",
+        user_id: user.user.id,
+        connection_id: consent.consent.id,
+        allowed_app_ids: [app.app.id],
+        source_app_id: "user"
+      },
+      {
+        id: "mem_pending_goal",
+        field_path: "fitness.goal",
+        value: "muscle gain",
+        category: "fitness",
+        status: "pending",
+        sensitivity: "normal",
+        user_id: user.user.id,
+        connection_id: consent.consent.id,
+        allowed_app_ids: [app.app.id]
+      },
+      {
+        id: "mem_sensitive_allergy",
+        field_path: "diet.allergy",
+        value: "peanuts",
+        category: "fitness",
+        status: "approved",
+        sensitivity: "sensitive",
+        user_id: user.user.id,
+        connection_id: consent.consent.id,
+        allowed_app_ids: [app.app.id]
+      },
+      {
+        id: "mem_raw",
+        field_path: "raw_capture_events",
+        value: "raw timeline",
+        category: "fitness",
+        status: "approved",
+        sensitivity: "normal",
+        user_id: user.user.id,
+        connection_id: consent.consent.id,
+        allowed_app_ids: [app.app.id]
+      }
+    )
+  })
+
+  const created = await service.createCapRequest(key.key, {
+    connection_id: consent.consent.id,
+    purpose: "onboarding_prefill",
+    requested_categories: ["fitness"],
+    requested_context: [
+      { description: "dietary preference", field_hint: "diet.preference", required: true },
+      { description: "allergy", field_hint: "diet.allergy", required: false },
+      { description: "workout goal", field_hint: "fitness.goal", required: false }
+    ]
+  })
+
+  const packetResult = await service.createCapPacket(key.key, {
+    request_id: created.request.request_id,
+    connection_id: consent.consent.id,
+    requested_categories: ["fitness"]
+  })
+
+  assert.equal(packetResult.packet.schema_version, "memact.cap_packet.v0")
+  assert.deepEqual(packetResult.packet.allowed_context.map((item) => item.field_path), ["diet.preference"])
+  assert.equal(packetResult.packet.missing_context.length, 2)
+  assert.deepEqual(packetResult.packet.forbidden_context, ["full_profile", "raw_capture_events", "unapproved_memory"])
+})
+
+test("CAP field proposal stays pending for user review", async () => {
+  const { service, key, consent } = await setupAccess(["context:propose"], { categories: ["fitness"] })
+  const result = await service.proposeCapContext(key.key, {
+    connection_id: consent.consent.id,
+    proposal: {
+      category: "fitness",
+      field_path: "fitness.goal",
+      proposed_value: "strength",
+      evidence_summary: "User selected strength workouts in app onboarding.",
+      confidence: 0.8
+    }
+  })
+
+  assert.equal(result.accepted, true)
+  assert.equal(result.proposal.schema_version, "memact.context_proposal.v1")
+  assert.equal(result.proposal.status, "pending")
+  assert.equal(result.proposal.field_path, "fitness.goal")
 })
 
 async function setupAccess(scopes, options = {}) {

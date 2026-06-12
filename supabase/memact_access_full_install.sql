@@ -1065,11 +1065,12 @@ as $$
       'memory:read_summary'
     ]::text[]),
     'default_app_categories', to_jsonb(array[
-      'web:news',
-      'web:research',
-      'media:video',
-      'ai:assistant',
-      'dev:code'
+      'preferences',
+      'fitness',
+      'dietary_preferences',
+      'shopping',
+      'learning',
+      'productivity'
     ]::text[]),
     'scopes', jsonb_build_object(
       'capture:webpage', jsonb_build_object('label', 'Use webpage evidence', 'description', 'Use approved webpage evidence to understand activity for this app.', 'grantsGraphRead', false),
@@ -1097,7 +1098,17 @@ as $$
       'media:audio', jsonb_build_object('label', 'Audio and podcasts', 'description', 'Podcasts, talks, songs with available text, and spoken audio context.'),
       'ai:assistant', jsonb_build_object('label', 'AI conversations', 'description', 'Allowed conversations with AI tools such as assistants and copilots.'),
       'dev:code', jsonb_build_object('label', 'Code and developer work', 'description', 'Repositories, docs, issues, pull requests, terminals, and coding tools.'),
-      'work:docs', jsonb_build_object('label', 'Documents and notes', 'description', 'Work documents, knowledge bases, notes, and writing tools.')
+      'work:docs', jsonb_build_object('label', 'Documents and notes', 'description', 'Work documents, knowledge bases, notes, and writing tools.'),
+      'preferences', jsonb_build_object('label', 'Preferences', 'description', 'User choices, likes, dislikes, and personalization preferences.'),
+      'fitness', jsonb_build_object('label', 'Fitness', 'description', 'Fitness goals, activity level, body metrics, hydration targets, and nutrition preferences.'),
+      'dietary_preferences', jsonb_build_object('label', 'Dietary preferences', 'description', 'Diet choices, allergies, restrictions, and nutrition preferences the user chooses to share.'),
+      'shopping', jsonb_build_object('label', 'Shopping', 'description', 'Product research, preferences, comparisons, and shopping details.'),
+      'learning', jsonb_build_object('label', 'Learning', 'description', 'Study, tutorials, courses, notes, and learning sessions.'),
+      'productivity', jsonb_build_object('label', 'Productivity', 'description', 'Tasks, workflows, calendars, docs, and work sessions.'),
+      'attention', jsonb_build_object('label', 'Attention', 'description', 'Focus, interruptions, sustained work, and attention details.'),
+      'reading', jsonb_build_object('label', 'Reading', 'description', 'Article reading behavior such as opens, scroll depth, finish rate, skips, and summary use.'),
+      'news', jsonb_build_object('label', 'News', 'description', 'News articles and current-event reading details.'),
+      'article', jsonb_build_object('label', 'Articles', 'description', 'Article pages, excerpts, topics, sources, and reading events.')
     ),
     'safety_rules', jsonb_build_object(
       'blockedUseCases', to_jsonb(array[

@@ -1,30 +1,31 @@
 # Memact Access Notes
 
-Access is the API and gateway layer apps use to access Memact.
+Access is the API and gateway layer apps use to ask Memact for permissioned work.
 
-It checks apps, API keys, consent, scopes, categories, feature access, capture
-event ingestion, and usage logs.
+It checks apps, API keys, consent, scopes, categories, memory suggestions,
+allowed memory reads, and usage logs.
 
 ## System Position
 
 ```text
-Website manages -> Access checks -> Capture records -> Inference understands -> Schema organizes -> Memory stores -> Playground features run -> Apps and users use results
+App suggests memory or sends app details -> Access checks -> Context organizes -> Yourself shows -> Memory stores accepted entries -> SDK returns allowed memory
 ```
 
-Access does not capture activity, infer meaning, form schemas, or store memory.
-It verifies whether a request is allowed, routes it, and can run Playground features
-when the Playground runtime is connected.
+Access does not decide identity. It verifies whether a request is allowed and
+routes it to the right Memact layer.
 
 ## Public Copy
 
 Use:
 
-- "Memact is a playground where apps personalize around what users choose."
-- "Apps send signals and use features through scoped API access."
+- "See what apps know about you and control it."
+- "Apps can suggest memory after consent."
 - "Users choose what each app can use."
+- "Activity is not identity."
 
 Avoid:
 
 - intent-first positioning
 - claims that Access is the meaning engine
 - raw-data export framing
+- Playground, Capture, or Inference as current core product language
