@@ -171,6 +171,12 @@ async function route(service, request, url, body) {
     })
   }
 
+  if (request.method === "POST" && path === "/v1/context/query") {
+    return service.queryContextFields(readMemactApiKey(request), body, {
+      connectionId: request.headers["x-memact-connection-id"]
+    })
+  }
+
   const auth = await service.authenticateSession(request.headers.authorization)
   if (request.method === "GET" && path === "/v1/me") {
     return { user: auth.user }
