@@ -1275,7 +1275,8 @@ $$;
 
 drop function if exists public.memact_grant_consent(uuid, text[]);
 drop function if exists public.memact_grant_consent(uuid, text[], text[]);
-create or replace function public.memact_grant_consent(app_id_input uuid, scopes_input text[], categories_input text[] default array['web:news','web:research','media:video','ai:assistant','dev:code']::text[])
+drop function if exists public.memact_grant_consent(text, text[], text[]);
+create or replace function public.memact_grant_consent(app_id_input text, scopes_input text[], categories_input text[] default array['web:news','web:research','media:video','ai:assistant','dev:code']::text[])
 returns jsonb
 language plpgsql
 security definer
@@ -1287,10 +1288,20 @@ declare
   clean_categories text[] := public.memact_clean_allowed_values(categories_input, public.memact_known_categories());
   target_app public.memact_apps%rowtype;
   target_consent public.memact_consents%rowtype;
+  target_app_id uuid;
 begin
+  if app_id_input ~ '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$' then
+    target_app_id := app_id_input::uuid;
+  else
+    select id into target_app_id from public.memact_apps app where app.slug = app_id_input and app.revoked_at is null limit 1;
+    if target_app_id is null then
+      select id into target_app_id from public.memact_apps app where app.name = app_id_input and app.revoked_at is null limit 1;
+    end if;
+  end if;
+
   select * into target_app
   from public.memact_apps app
-  where app.id = app_id_input
+  where app.id = target_app_id
     and app.revoked_at is null;
   if not found then raise exception 'App not found.'; end if;
   if array_length(clean_scopes, 1) is null then raise exception 'At least one scope is required.'; end if;
@@ -1394,7 +1405,8 @@ end;
 $$;
 
 drop function if exists public.memact_get_connect_app(uuid, text[], text[]);
-create or replace function public.memact_get_connect_app(app_id_input uuid, scopes_input text[] default array[]::text[], categories_input text[] default array[]::text[])
+drop function if exists public.memact_get_connect_app(text, text[], text[]);
+create or replace function public.memact_get_connect_app(app_id_input text, scopes_input text[] default array[]::text[], categories_input text[] default array[]::text[])
 returns jsonb
 language plpgsql
 stable
@@ -1404,10 +1416,20 @@ as $$
 declare
   current_user_id uuid := public.memact_require_authenticated_user();
   target_app public.memact_apps%rowtype;
+  target_app_id uuid;
   requested_scopes text[];
   requested_categories text[];
 begin
-  select * into target_app from public.memact_apps app where app.id = app_id_input and app.revoked_at is null;
+  if app_id_input ~ '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$' then
+    target_app_id := app_id_input::uuid;
+  else
+    select id into target_app_id from public.memact_apps app where app.slug = app_id_input and app.revoked_at is null limit 1;
+    if target_app_id is null then
+      select id into target_app_id from public.memact_apps app where app.name = app_id_input and app.revoked_at is null limit 1;
+    end if;
+  end if;
+
+  select * into target_app from public.memact_apps app where app.id = target_app_id and app.revoked_at is null;
   if not found then raise exception 'App not found.'; end if;
   requested_scopes := case when array_length(scopes_input, 1) is null then target_app.default_scopes else public.memact_clean_allowed_values(scopes_input, public.memact_known_scopes()) end;
   requested_categories := case when array_length(categories_input, 1) is null then target_app.default_categories else public.memact_clean_allowed_values(categories_input, public.memact_known_categories()) end;
@@ -1438,7 +1460,8 @@ end;
 $$;
 
 drop function if exists public.memact_connect_app(uuid, text[], text[]);
-create or replace function public.memact_connect_app(app_id_input uuid, scopes_input text[], categories_input text[] default array[]::text[])
+drop function if exists public.memact_connect_app(text, text[], text[]);
+create or replace function public.memact_connect_app(app_id_input text, scopes_input text[], categories_input text[] default array[]::text[])
 returns jsonb
 language plpgsql
 security definer
