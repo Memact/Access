@@ -231,3 +231,119 @@ test("updating an app updates details and checks unique slugs", async () => {
   assert.equal(updatedName.app.name, "First App Revised")
   assert.equal(updatedName.app.slug, "first-app-revised")
 })
+
+test("queryContextFields handles stateless and stateful context queries using LocalContextMatcher", async () => {
+  const service = new AccessService(new MemoryStore())
+  const developer = await service.signup({ email: "query-dev@example.com", password: "long password" })
+  const user = await service.signup({ email: "query-user@example.com", password: "long password" })
+  const app = await service.registerApp(developer.user.id, { name: "Query App", categories: ["dev:code"] })
+  const key = await service.createApiKey(developer.user.id, {
+    app_id: app.app.id,
+    scopes: ["memory:read_summary"]
+  })
+  const consent = await service.grantConsent(user.user.id, {
+    app_id: app.app.id,
+    scopes: ["memory:read_summary"],
+    categories: ["dev:code"]
+  })
+
+  // 1. Stateless match: client provides memory_records directly
+  const statelessResult = await service.queryContextFields(key.key, {
+    connection_id: consent.consent.id,
+    requested_context: [
+      { description: "preferred coding language", field_hint: "coding.languages.preferred", required: true }
+    ],
+    activity_categories: ["dev:code"],
+    memory_records: [
+      {
+        field_path: "coding.languages.preferred",
+        value: "TypeScript",
+        category: "dev:code",
+        status: "approved",
+        sensitivity: "normal",
+        user_id: user.user.id
+      }
+    ]
+  })
+  assert.equal(statelessResult.matches.length, 1)
+  assert.equal(statelessResult.matches[0].candidates.length, 1)
+  assert.equal(statelessResult.matches[0].candidates[0].memory.value, "TypeScript")
+
+  // 2. Stateful match: fetches from database
+  await service.mutate(async (data) => {
+    data.memory_records.push({
+      id: "stateful_rec_1",
+      field_path: "coding.languages.preferred",
+      value: "TypeScript",
+      category: "dev:code",
+      status: "approved",
+      sensitivity: "normal",
+      user_id: user.user.id,
+      connection_id: consent.consent.id,
+      allowed_app_ids: [app.app.id]
+    })
+  })
+
+  const statefulResult = await service.queryContextFields(key.key, {
+    connection_id: consent.consent.id,
+    requested_context: [
+      { description: "preferred coding language", field_hint: "coding.languages.preferred", required: true }
+    ],
+    activity_categories: ["dev:code"]
+  })
+  assert.equal(statefulResult.matches.length, 1)
+  assert.equal(statefulResult.matches[0].candidates.length, 1)
+  assert.equal(statefulResult.matches[0].candidates[0].memory.value, "TypeScript")
+})
+
+test("User notebook endpoints allow listing, creating, approving, rejecting, and deleting notebook entries", async () => {
+  const service = new AccessService(new MemoryStore())
+  const user = await service.signup({ email: "notebook-user@example.com", password: "long password" })
+
+  // 1. Create a manual claim
+  const createResult = await service.createUserNotebookClaim(user.user.id, {
+    title: "Prefers dark theme",
+    category: "preferences",
+    value: "dark",
+    field_path: "settings.theme"
+  })
+  assert.equal(createResult.claim.value, "dark")
+
+  // 2. Add a pending proposal (e.g. proposed by an app)
+  await service.mutate(async (data) => {
+    data.wiki_proposals.push({
+      entry_id: "prop_123",
+      user_id: user.user.id,
+      app_id: "app_456",
+      source_app: "App 456",
+      category: "dev:code",
+      title: "Interests in AI",
+      field_path: "coding.ai",
+      value: "Agentic AI",
+      status: "pending"
+    })
+  })
+
+  // 3. List the notebook
+  const listResult = await service.listUserNotebook(user.user.id)
+  assert.equal(listResult.claims.length, 1)
+  assert.equal(listResult.suggestions.length, 1)
+  assert.equal(listResult.claims[0].value, "dark")
+  assert.equal(listResult.suggestions[0].entry_id, "prop_123")
+
+  // 4. Approve the proposal
+  const approveResult = await service.approveUserNotebookProposal(user.user.id, "prop_123")
+  assert.equal(approveResult.claim.value, "Agentic AI")
+  assert.equal(approveResult.proposal.status, "approved")
+
+  // List again, now should have 2 claims and 0 suggestions
+  const listResult2 = await service.listUserNotebook(user.user.id)
+  assert.equal(listResult2.claims.length, 2)
+  assert.equal(listResult2.suggestions.length, 0)
+
+  // 5. Delete the first claim
+  await service.deleteUserNotebookClaim(user.user.id, createResult.claim.id)
+  const listResult3 = await service.listUserNotebook(user.user.id)
+  assert.equal(listResult3.claims.length, 1)
+  assert.equal(listResult3.claims[0].value, "Agentic AI")
+})

@@ -27,6 +27,6 @@
     "test": "node --test"
   },
   "dependencies": {
-    "memact-context": "file:../Context"
+    "memact-context": "file:../schema"
   }
 }

@@ -956,20 +956,161 @@ export class AccessService {
 
   async queryContextFields(apiKey, body = {}, options = {}) {
     const requestedContext = Array.isArray(body.requested_context) ? body.requested_context : []
-    const memoryRecords = Array.isArray(body.memory_records) ? body.memory_records : []
     const connectionId = body.connection_id || options.connectionId || ""
+    const activityCategories = body.activity_categories || body.requested_categories || []
 
-    await this.verifyApiAccess(apiKey, ["memory:read_summary"], body.activity_categories || [], connectionId)
+    const access = await this.verifyApiAccess(apiKey, ["memory:read_summary"], activityCategories, connectionId)
 
-    const matcher = new LocalContextMatcher({ threshold: body.threshold ?? 0.12 })
-    const matches = matcher.match(requestedContext, memoryRecords)
+    return this.mutate(async (data) => {
+      let memoryRecords = Array.isArray(body.memory_records) ? body.memory_records : []
+      const isStateful = !body.memory_records || !body.memory_records.length
 
+      if (isStateful) {
+        const capRequest = {
+          requested_categories: activityCategories
+        }
+        memoryRecords = filterCapMemory(data.memory_records, capRequest, access)
+      }
+
+      const matcher = new LocalContextMatcher({ threshold: body.threshold ?? 0.12 })
+      const matches = matcher.match(requestedContext, memoryRecords)
+
+      // Audit Logging
+      audit(data, access.user_id, "context.query", {
+        app_id: access.app.id,
+        connection_id: access.connection_id,
+        purpose: String(body.purpose || "context_query").slice(0, 200),
+        requested_count: requestedContext.length,
+        matched_count: matches.filter(m => m.candidates.length > 0).length,
+        stateful: isStateful
+      })
+
+      // Record credit consumption event
+      const credit_event = recordCreditEvent(data, {
+        app_id: access.app.id,
+        connection_id: access.connection_id,
+        amount: -1,
+        reason: "context_read",
+        detail: `App queried context: ${requestedContext.length} fields`
+      }, this.now)
+
+      return {
+        matches,
+        matcher_kind: matcher.kind,
+        requested_count: requestedContext.length,
+        memory_count: memoryRecords.length,
+        credits: creditSummary(data, access.app.id),
+        credit_event
+      }
+    })
+  }
+
+  async listUserNotebook(userId) {
+    const data = await this.store.read()
+    const activeClaims = data.memory_records.filter((record) => record.user_id === userId && !record.deleted_at)
+    const pendingProposals = data.wiki_proposals.filter((proposal) => proposal.user_id === userId && proposal.status === "pending")
     return {
-      matches,
-      matcher_kind: matcher.kind,
-      requested_count: requestedContext.length,
-      memory_count: memoryRecords.length
+      claims: activeClaims,
+      suggestions: pendingProposals
     }
+  }
+
+  async createUserNotebookClaim(userId, claimInput) {
+    return this.mutate(async (data) => {
+      const now = new Date().toISOString()
+      const cleanCategory = String(claimInput.category || "general").trim().toLowerCase()
+      const cleanTitle = String(claimInput.title || "").trim()
+      const claimId = randomId("claim")
+      const claim = {
+        id: claimId,
+        user_id: userId,
+        title: cleanTitle,
+        category: cleanCategory,
+        group: claimInput.category || "General",
+        subgroup: claimInput.subgroup || "General",
+        field_path: claimInput.field_path || `manual.${cleanCategory}.${randomId("field")}`,
+        value: claimInput.value,
+        visibility: claimInput.visibility || "private",
+        expires_at: claimInput.expires_at || null,
+        source_note: String(claimInput.source_note || "").trim(),
+        source_type: "user",
+        source_label: "Added by you",
+        source_detail: "Source: User-added",
+        status: "approved",
+        user_verified: true,
+        confidence: 1.0,
+        created_at: now,
+        updated_at: now,
+        competing_interpretations: [],
+        contradictions: []
+      }
+      data.memory_records.push(claim)
+      audit(data, userId, "notebook.claim.create", { claim_id: claimId, field_path: claim.field_path })
+      return { claim }
+    })
+  }
+
+  async approveUserNotebookProposal(userId, proposalId) {
+    return this.mutate(async (data) => {
+      const proposal = data.wiki_proposals.find((item) => item.entry_id === proposalId && item.user_id === userId)
+      if (!proposal) throw new AccessError(404, "proposal_not_found", "Suggestion not found.")
+      
+      proposal.status = "approved"
+      proposal.updated_at = new Date().toISOString()
+
+      const claimId = randomId("claim")
+      const claim = {
+        id: claimId,
+        user_id: userId,
+        title: proposal.title,
+        category: proposal.category,
+        group: proposal.category,
+        subgroup: "General",
+        field_path: proposal.field_path || `app.${proposal.category}.${proposal.entry_id}`,
+        value: proposal.value || proposal.context || {},
+        visibility: "private",
+        source_app_id: proposal.app_id,
+        connection_id: proposal.connection_id,
+        source_type: "app",
+        source_label: proposal.source_app || "Connected app",
+        source_detail: `Suggested by ${proposal.source_app || "app"}`,
+        status: "approved",
+        user_verified: true,
+        confidence: proposal.confidence || 0.65,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        competing_interpretations: proposal.competing_interpretations || [],
+        contradictions: proposal.contradictions || []
+      }
+
+      data.memory_records.push(claim)
+      audit(data, userId, "notebook.proposal.approve", { proposal_id: proposalId, claim_id: claimId })
+      return { claim, proposal }
+    })
+  }
+
+  async rejectUserNotebookProposal(userId, proposalId) {
+    return this.mutate(async (data) => {
+      const proposal = data.wiki_proposals.find((item) => item.entry_id === proposalId && item.user_id === userId)
+      if (!proposal) throw new AccessError(404, "proposal_not_found", "Suggestion not found.")
+      
+      proposal.status = "rejected"
+      proposal.updated_at = new Date().toISOString()
+      
+      audit(data, userId, "notebook.proposal.reject", { proposal_id: proposalId })
+      return { proposal }
+    })
+  }
+
+  async deleteUserNotebookClaim(userId, claimId) {
+    return this.mutate(async (data) => {
+      const index = data.memory_records.findIndex((item) => item.id === claimId && item.user_id === userId)
+      if (index === -1) throw new AccessError(404, "claim_not_found", "Notebook entry not found.")
+      
+      const [deleted] = data.memory_records.splice(index, 1)
+      audit(data, userId, "notebook.claim.delete", { claim_id: claimId, field_path: deleted.field_path })
+      return { success: true }
+    })
   }
 
 

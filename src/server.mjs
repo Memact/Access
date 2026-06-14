@@ -181,6 +181,24 @@ async function route(service, request, url, body) {
   if (request.method === "GET" && path === "/v1/me") {
     return { user: auth.user }
   }
+  if (request.method === "GET" && path === "/v1/user/notebook") {
+    return service.listUserNotebook(auth.user.id)
+  }
+  if (request.method === "POST" && path === "/v1/user/notebook") {
+    return service.createUserNotebookClaim(auth.user.id, body)
+  }
+  if (request.method === "POST" && path.startsWith("/v1/user/notebook/") && path.endsWith("/approve")) {
+    const proposalId = decodeURIComponent(path.slice("/v1/user/notebook/".length, -"/approve".length))
+    return service.approveUserNotebookProposal(auth.user.id, proposalId)
+  }
+  if (request.method === "POST" && path.startsWith("/v1/user/notebook/") && path.endsWith("/reject")) {
+    const proposalId = decodeURIComponent(path.slice("/v1/user/notebook/".length, -"/reject".length))
+    return service.rejectUserNotebookProposal(auth.user.id, proposalId)
+  }
+  if (request.method === "DELETE" && path.startsWith("/v1/user/notebook/")) {
+    const claimId = decodeURIComponent(path.slice("/v1/user/notebook/".length))
+    return service.deleteUserNotebookClaim(auth.user.id, claimId)
+  }
   if (request.method === "GET" && path === "/v1/capture/events") {
     return service.listCaptureEvents(auth.user.id, {
       app_id: url.searchParams.get("app_id") || ""
