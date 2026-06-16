@@ -140,6 +140,58 @@ test("HTTP intent prediction route is no longer core", async () => {
   }
 })
 
+test("HTTP /v1/context/query route returns context matches", async () => {
+  const service = new AccessService(new MemoryStore())
+  const signup = await service.signup({ email: "server@example.com", password: "correct horse battery" })
+  const app = await service.registerApp(signup.user.id, { name: "Server App", categories: ["fitness"] })
+  const key = await service.createApiKey(signup.user.id, {
+    app_id: app.app.id,
+    scopes: ["memory:read_summary"]
+  })
+  const consent = await service.grantConsent(signup.user.id, {
+    app_id: app.app.id,
+    scopes: ["memory:read_summary"],
+    categories: ["fitness"]
+  })
+
+  // Add some memory records to the store directly
+  await service.mutate(async (data) => {
+    data.memory_records.push({
+      id: "mem_test",
+      connection_id: consent.consent.id,
+      memory_type: "fitness",
+      field_path: "workout_pref",
+      value: "loves running",
+      confidence: 0.95,
+      created_at: new Date().toISOString()
+    })
+  })
+
+  const { origin, close } = await listen(createAccessServer(service))
+  try {
+    const response = await fetch(`${origin}/v1/context/query`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${key.key}`,
+        "Content-Type": "application/json",
+        "x-memact-connection-id": consent.consent.id
+      },
+      body: JSON.stringify({
+        requested_context: ["workout_pref"]
+      })
+    })
+
+    assert.equal(response.status, 200)
+    const payload = await response.json()
+    assert.strictEqual(payload.requested_count, 1)
+    assert.strictEqual(payload.memory_count, 1)
+    assert.ok(Array.isArray(payload.matches))
+    assert.strictEqual(payload.matches[0].candidates[0].memory.value, "loves running")
+  } finally {
+    await close()
+  }
+})
+
 function listen(server) {
   return new Promise((resolve, reject) => {
     server.once("error", reject)

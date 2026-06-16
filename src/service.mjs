@@ -791,14 +791,14 @@ export class AccessService {
   }
 
   async queryContextFields(apiKey, body = {}, options = {}) {
-  const requestedContext = Array.isArray(body.requested_context) ? body.requested_context : []
-  const connectionId = body.connection_id || options.connectionId || ""
+    const requestedContext = Array.isArray(body.requested_context) ? body.requested_context : []
+    const connectionId = body.connection_id || options.connectionId || ""
 
-  const access = await this.verifyApiAccess(apiKey, ["memory:read_summary"], body.activity_categories || [], connectionId)
+    const access = await this.verifyApiAccess(apiKey, ["memory:read_summary"], body.activity_categories || [], connectionId)
 
-  return this.mutate(async (data) => {
+    const data = await this.store.read()
     // If caller passed memory_records, use them; otherwise fetch from store filtered by consent
-    let memoryRecords = Array.isArray(body.memory_records) && body.memory_records.length > 0
+    const memoryRecords = Array.isArray(body.memory_records) && body.memory_records.length > 0
       ? body.memory_records
       : data.memory_records.filter((record) =>
           !record.connection_id || record.connection_id === access.connection_id
@@ -813,8 +813,7 @@ export class AccessService {
       requested_count: requestedContext.length,
       memory_count: memoryRecords.length
     }
-  })
-}
+  }
 
 
   async mutate(fn) {
