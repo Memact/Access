@@ -286,7 +286,7 @@ begin
 end;
 $$;
 
-grant execute on function public.memact_schema_definition_payload(public.memact_schema_definitions) to anon, authenticated;
+grant execute on function public.memact_schema_definition_payload to anon, authenticated;
 grant execute on function public.memact_upsert_schema_definition(text, uuid, text, text, text, jsonb) to anon, authenticated;
 grant execute on function public.memact_upsert_subschema_definition(text, uuid, text, text, text, jsonb) to anon, authenticated;
 grant execute on function public.memact_list_schema_definitions(text, uuid, text[]) to anon, authenticated;
