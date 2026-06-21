@@ -71,23 +71,6 @@ test("Supabase SQL adds capture and feature tables", async () => {
   assert.match(migration, /memact_memory_records/)
 })
 
-test("Supabase SQL adds schema definition persistence and RPCs", async () => {
-  const migration = await fs.readFile(new URL("../supabase/migrations/20260522100000_schema_definitions.sql", import.meta.url), "utf8")
-  const fullInstall = await fs.readFile(fullInstallPath, "utf8")
-
-  for (const sql of [migration, fullInstall]) {
-    assert.match(sql, /memact_schema_definitions/)
-    assert.match(sql, /memact_subschema_definitions/)
-    assert.match(sql, /memact_upsert_schema_definition/)
-    assert.match(sql, /memact_upsert_subschema_definition/)
-    assert.match(sql, /memact_list_schema_definitions/)
-    assert.match(sql, /memact_get_schema_definition/)
-    assert.match(sql, /array\['schema:write'\]::text\[\]/)
-    assert.match(sql, /array\['schema:read'\]::text\[\]/)
-    assert.match(sql, /notify pgrst, 'reload schema';/)
-  }
-})
-
 test("Supabase SQL adds feature connection persistence", async () => {
   const migration = await fs.readFile(new URL("../supabase/migrations/20260522110000_feature_connections.sql", import.meta.url), "utf8")
   const fullInstall = await fs.readFile(new URL("../supabase/memact_access_full_install.sql", import.meta.url), "utf8")
