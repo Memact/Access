@@ -6,6 +6,11 @@ import { JsonFileStore } from "./store.mjs"
 import { AccessError, AccessService } from "./service.mjs"
 import { CATEGORY_DEFINITIONS, KNOWLEDGE_GRAPH_CONTRACT, PORTABLE_CONTEXT_CONTRACT, SAFETY_RULES, SENSITIVE_CAPTURE_RULES } from "./policy.mjs"
 
+export const auditLogger = {
+  log: (entry) => {
+    console.log(JSON.stringify({ audit: entry }));
+  }
+};
 
 loadLocalEnv()
 
@@ -19,6 +24,8 @@ const allowedOrigins = new Set(String(process.env.MEMACT_ACCESS_ALLOWED_ORIGINS 
 
 export function createAccessServer(service) {
   return http.createServer(async (request, response) => {
+    let auditEntry = null; // This will hold our log data if it matches a context endpoint
+
     try {
       if (request.method === "OPTIONS") {
         send(response, 204, null, request)
@@ -26,13 +33,36 @@ export function createAccessServer(service) {
       }
       const url = new URL(request.url || "/", `http://${request.headers.host || "localhost"}`)
       const body = await readJson(request)
+      const path = url.pathname
+
+      if (request.method === "POST" && (path === "/v1/cap/request" || path === "/v1/contributions/propose")) {
+        auditEntry = {
+          timestamp: new Date().toISOString(),
+          app_id: body?.app_id || "",
+          category: body?.category || "",
+          visibility_level: body?.visibility_level || "default"
+        };
+      }
+
       const result = await route(service, request, url, body)
       send(response, 200, result, request)
+
+      if (auditEntry) {
+        auditEntry.status = "allowed";
+        auditLogger.log(auditEntry);
+      }
+
     } catch (error) {
       const status = error instanceof AccessError ? error.status : 500
       const message = status === 500
         ? safeInternalErrorMessage(error)
         : error.message
+
+      if (auditEntry) {
+        auditEntry.status = "denied";
+        auditLogger.log(auditEntry);
+      }
+
       send(response, status, {
         error: {
           code: error.code || "internal_error",

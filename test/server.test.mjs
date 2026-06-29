@@ -98,7 +98,93 @@ test("HTTP verification can proxy to Supabase-backed Access records", async () =
   }
 })
 
+test("Audit Logging System traces context read requests (CAP requests)", async () => {
+  const { auditLogger } = await import("../src/server.mjs")
+  const logs = []
+  const originalLog = auditLogger.log
+  
+  // Intercept the logger to capture log records
+  auditLogger.log = (entry) => { logs.push(entry) }
 
+  // Create a minimal mock service to bypass standard authentication or database requirements
+  const mockService = {
+    authenticateSession: async () => ({ user: { id: "user-123" }, token: "mock-token" }),
+    requestContextPacket: async () => ({ ok: true })
+  }
+
+  const { origin, close } = await listen(createAccessServer(mockService))
+  try {
+    const response = await fetch(`${origin}/v1/cap/request`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": "Bearer mock_user_session"
+      },
+      body: JSON.stringify({
+        app_id: "client-app-xyz",
+        category: "health_metrics",
+        visibility_level: "private",
+        raw_token: "SENSITIVE_TOKEN_THAT_SHOULD_NOT_BE_LOGGED" // Test privacy guard
+      })
+    })
+
+    assert.equal(response.status, 200)
+    assert.equal(logs.length, 1)
+    
+    const log = logs[0]
+    assert.ok(log.timestamp, "Should contain a valid timestamp")
+    assert.equal(log.app_id, "client-app-xyz")
+    assert.equal(log.category, "health_metrics")
+    assert.equal(log.visibility_level, "private")
+    assert.equal(log.status, "allowed")
+    
+    // Privacy safeguard verification
+    assert.equal(log.raw_token, undefined, "Privacy Guard Failure: leaked internal data tokens into audit log")
+  } finally {
+    await close()
+    auditLogger.log = originalLog // Restore the original logger function
+  }
+})
+
+test("Audit Logging System traces denied context access on route error", async () => {
+  const { auditLogger } = await import("../src/server.mjs")
+  const logs = []
+  const originalLog = auditLogger.log
+  
+  auditLogger.log = (entry) => { logs.push(entry) }
+
+  // Mock service that completely throws an error simulating a rejection or invalid key
+  const mockService = {
+    requestContextPacket: async () => {
+      const { AccessError } = await import("../src/service.mjs")
+      throw new AccessError(403, "access_denied", "Unauthorized category request.")
+    }
+  }
+
+  const { origin, close } = await listen(createAccessServer(mockService))
+  try {
+    const response = await fetch(`${origin}/v1/cap/request`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        app_id: "untrusted-app",
+        category: "financial_records",
+        visibility_level: "restricted"
+      })
+    })
+
+    assert.equal(response.status, 403)
+    assert.equal(logs.length, 1)
+    
+    const log = logs[0]
+    assert.equal(log.app_id, "untrusted-app")
+    assert.equal(log.category, "financial_records")
+    assert.equal(log.status, "denied")
+  } finally {
+    await close()
+    auditLogger.log = originalLog
+  }
+})
 
 function listen(server) {
   return new Promise((resolve, reject) => {
