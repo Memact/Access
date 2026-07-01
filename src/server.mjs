@@ -17,7 +17,7 @@ loadLocalEnv()
 const host = process.env.MEMACT_ACCESS_HOST || "127.0.0.1"
 const port = Number(process.env.PORT || process.env.MEMACT_ACCESS_PORT || 8787)
 const storePath = process.env.MEMACT_ACCESS_STORE || ".data/access-store.json"
-const allowedOrigins = new Set(String(process.env.MEMACT_ACCESS_ALLOWED_ORIGINS || "http://localhost:3000,http://localhost:5173,http://localhost:4173,https://www.memact.com")
+const allowedOrigins = new Set(String(process.env.ALLOWED_ORIGINS || "http://localhost:3000,http://localhost:5173,http://localhost:4173,https://www.memact.com")
   .split(",")
   .map((item) => item.trim())
   .filter(Boolean))
@@ -26,8 +26,24 @@ export function createAccessServer(service) {
   return http.createServer(async (request, response) => {
     let auditEntry = null; // This will hold our log data if it matches a context endpoint
 
+    const origin=request.headers.origin;
+    const allowedOrigins=new Set(String(process.env.ALLOWED_ORIGINS || "http://localhost:3000,http://localhost:5173,http://localhost:4173,https://www.memact.com")
+      .split(",")
+      .map((item) => item.trim())
+      .filter(Boolean));
+
+    if (origin && allowedOrigins.has(origin)) {
+      response.setHeader("Access-Control-Allow-Origin", origin);
+      response.setHeader("Vary", "Origin");
+    }
     try {
       if (request.method === "OPTIONS") {
+        const origin = request.headers.origin
+        if (origin && !allowedOrigins.has(origin)) {
+          response.writeHead(403, { "Content-Type": "text/plain" })
+          response.end("CORS not allowed")
+          return
+        }
         send(response, 204, null, request)
         return
       }

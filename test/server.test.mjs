@@ -208,3 +208,49 @@ function restoreEnv(key, value) {
     process.env[key] = value
   }
 }
+test("CORS Security: allows and attaches headers for an authorized origin", async () => {
+  const previousAllowed = process.env.ALLOWED_ORIGINS
+  // Explicitly configure testing environment for customizable origins
+  process.env.ALLOWED_ORIGINS = "https://app.memact.com,http://localhost:3000"
+
+  // Dynamically re-import or spin up a mock service
+  const mockService = { policy: async () => ({}) }
+  const { origin, close } = await listen(createAccessServer(mockService))
+
+  try {
+    const response = await fetch(`${origin}/health`, {
+      method: "GET",
+      headers: { "Origin": "https://app.memact.com" }
+    })
+
+    assert.equal(response.status, 200)
+    assert.equal(response.headers.get("access-control-allow-origin"), "https://app.memact.com")
+    assert.equal(response.headers.get("vary"), "Origin")
+  } finally {
+    await close()
+    restoreEnv("ALLOWED_ORIGINS", previousAllowed)
+  }
+})
+
+test("CORS Security: blocks preflight OPTIONS request from an untrusted origin", async () => {
+  const previousAllowed = process.env.ALLOWED_ORIGINS
+  process.env.ALLOWED_ORIGINS = "https://app.memact.com"
+
+  const mockService = {}
+  const { origin, close } = await listen(createAccessServer(mockService))
+
+  try {
+    const response = await fetch(`${origin}/health`, {
+      method: "OPTIONS",
+      headers: { "Origin": "https://untrusted-attacker.com" }
+    })
+
+    // Preflight check is rejected with 403 Forbidden
+    assert.equal(response.status, 403)
+    const text = await response.text()
+    assert.equal(text, "CORS not allowed")
+  } finally {
+    await close()
+    restoreEnv("ALLOWED_ORIGINS", previousAllowed)
+  }
+})
